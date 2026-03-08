@@ -12,6 +12,7 @@ dependencies = [
     "sqlalchemy>=2.0.36",
     "uvicorn[standard]>=0.30.0",
     "pymysql>=1.1.2",
+    "pyyaml>=6.0.1",
     "python-dotenv>=1.2.2",
     "alembic>=1.18.4",
 ]
