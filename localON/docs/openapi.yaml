@@ -1,0 +1,563 @@
+openapi: 3.0.3
+info:
+  title: LOCAL ON API
+  version: 1.0.0
+  description: Real-time Seoul area status API
+servers:
+  - url: http://localhost:8000
+tags:
+  - name: main
+    description: Main screen data
+  - name: areas
+    description: Area detail data
+  - name: search
+    description: Area search
+paths:
+  /main:
+    get:
+      tags: [main]
+      summary: Get main screen data
+      parameters:
+        - in: query
+          name: lat
+          required: false
+          schema:
+            type: number
+            format: float
+          description: User latitude
+        - in: query
+          name: lng
+          required: false
+          schema:
+            type: number
+            format: float
+          description: User longitude
+      responses:
+        "200":
+          description: Main data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MainOut"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorOut"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorOut"
+
+  /areas/{area_id}:
+    get:
+      tags: [areas]
+      summary: Get area detail
+      parameters:
+        - in: path
+          name: area_id
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          description: Area ID
+        - in: query
+          name: date
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Date for hourly data query (default is today)
+      responses:
+        "200":
+          description: Area detail data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AreaDetailOut"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorOut"
+        "404":
+          description: Area not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorOut"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorOut"
+
+  /search:
+    get:
+      tags: [search]
+      summary: Search areas
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Search keyword
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchOut"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorOut"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorOut"
+
+components:
+  schemas:
+    ErrorOut:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+
+    AreaSummaryOut:
+      type: object
+      required:
+        [
+          area_id,
+          area_cd,
+          name,
+          category,
+          lat,
+          lng,
+          congestion_level,
+          congestion_score,
+          population_min,
+          population_max,
+          weather_temp,
+          air_idx,
+          distance_m,
+          updated_at,
+        ]
+      properties:
+        area_id:
+          type: integer
+        area_cd:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+          nullable: true
+        lat:
+          type: number
+          format: float
+          nullable: true
+        lng:
+          type: number
+          format: float
+          nullable: true
+        congestion_level:
+          type: string
+          nullable: true
+        congestion_score:
+          type: number
+          format: float
+          nullable: true
+        population_min:
+          type: integer
+          nullable: true
+        population_max:
+          type: integer
+          nullable: true
+        weather_temp:
+          type: number
+          format: float
+          nullable: true
+        air_idx:
+          type: string
+          nullable: true
+        distance_m:
+          type: integer
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    HotPlaceOut:
+      type: object
+      required: [rank, area_id, name, congestion_level, congestion_score, rank_change]
+      properties:
+        rank:
+          type: integer
+        area_id:
+          type: integer
+        name:
+          type: string
+        congestion_level:
+          type: string
+          nullable: true
+        congestion_score:
+          type: number
+          format: float
+          nullable: true
+        rank_change:
+          type: integer
+          nullable: true
+
+    RisingOut:
+      type: object
+      required: [area_id, name, change_pct, change_label]
+      properties:
+        area_id:
+          type: integer
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        change_pct:
+          type: number
+          format: float
+          nullable: true
+        change_label:
+          type: string
+          nullable: true
+
+    TrendsOut:
+      type: object
+      required: [hot_places, rising]
+      properties:
+        hot_places:
+          type: array
+          items:
+            $ref: "#/components/schemas/HotPlaceOut"
+        rising:
+          type: array
+          items:
+            $ref: "#/components/schemas/RisingOut"
+
+    MainOut:
+      type: object
+      required: [areas, trends]
+      properties:
+        areas:
+          type: array
+          items:
+            $ref: "#/components/schemas/AreaSummaryOut"
+        trends:
+          $ref: "#/components/schemas/TrendsOut"
+
+    CongestionOut:
+      type: object
+      required:
+        [
+          level,
+          score,
+          msg,
+          population_min,
+          population_max,
+          sdot_current,
+          sdot_baseline,
+          is_estimated,
+          updated_at,
+        ]
+      properties:
+        level:
+          type: string
+          nullable: true
+        score:
+          type: number
+          format: float
+          nullable: true
+        msg:
+          type: string
+          nullable: true
+        population_min:
+          type: integer
+          nullable: true
+        population_max:
+          type: integer
+          nullable: true
+        sdot_current:
+          type: integer
+          nullable: true
+        sdot_baseline:
+          type: integer
+          nullable: true
+        is_estimated:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    HourlyOut:
+      type: object
+      required: [hour, actual, baseline, level]
+      properties:
+        hour:
+          type: integer
+        actual:
+          type: integer
+          nullable: true
+        baseline:
+          type: integer
+          nullable: true
+        level:
+          type: string
+          nullable: true
+
+    RecommendationOut:
+      type: object
+      required: [time_range, expected_level, avg_population]
+      properties:
+        time_range:
+          type: string
+        expected_level:
+          type: string
+        avg_population:
+          type: integer
+
+    DemographicsOut:
+      type: object
+      required:
+        [
+          male_rate,
+          female_rate,
+          age_0,
+          age_10,
+          age_20,
+          age_30,
+          age_40,
+          age_50,
+          age_60,
+          age_70,
+        ]
+      properties:
+        male_rate:
+          type: number
+          format: float
+          nullable: true
+        female_rate:
+          type: number
+          format: float
+          nullable: true
+        age_0:
+          type: number
+          format: float
+          nullable: true
+        age_10:
+          type: number
+          format: float
+          nullable: true
+        age_20:
+          type: number
+          format: float
+          nullable: true
+        age_30:
+          type: number
+          format: float
+          nullable: true
+        age_40:
+          type: number
+          format: float
+          nullable: true
+        age_50:
+          type: number
+          format: float
+          nullable: true
+        age_60:
+          type: number
+          format: float
+          nullable: true
+        age_70:
+          type: number
+          format: float
+          nullable: true
+
+    DemandOut:
+      type: object
+      required: [type, resident_rate, non_resident_rate, demographics]
+      properties:
+        type:
+          type: string
+        resident_rate:
+          type: number
+          format: float
+          nullable: true
+        non_resident_rate:
+          type: number
+          format: float
+          nullable: true
+        demographics:
+          $ref: "#/components/schemas/DemographicsOut"
+
+    CommercialOut:
+      type: object
+      required: [level, payment_cnt, payment_amt_min, payment_amt_max]
+      properties:
+        level:
+          type: string
+          nullable: true
+        payment_cnt:
+          type: integer
+          nullable: true
+        payment_amt_min:
+          type: integer
+          nullable: true
+        payment_amt_max:
+          type: integer
+          nullable: true
+
+    WeatherOut:
+      type: object
+      required:
+        [temp, sensible_temp, humidity, wind_spd, pm25, pm25_index, pm10, pm10_index]
+      properties:
+        temp:
+          type: number
+          format: float
+          nullable: true
+        sensible_temp:
+          type: number
+          format: float
+          nullable: true
+        humidity:
+          type: integer
+          nullable: true
+        wind_spd:
+          type: number
+          format: float
+          nullable: true
+        pm25:
+          type: number
+          format: float
+          nullable: true
+        pm25_index:
+          type: string
+          nullable: true
+        pm10:
+          type: number
+          format: float
+          nullable: true
+        pm10_index:
+          type: string
+          nullable: true
+
+    AreaDetailOut:
+      type: object
+      required:
+        [
+          area_id,
+          area_cd,
+          name,
+          eng_name,
+          category,
+          lat,
+          lng,
+          congestion,
+          hourly,
+          recommendations,
+          demand,
+          commercial,
+          weather,
+        ]
+      properties:
+        area_id:
+          type: integer
+        area_cd:
+          type: string
+        name:
+          type: string
+        eng_name:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        lat:
+          type: number
+          format: float
+          nullable: true
+        lng:
+          type: number
+          format: float
+          nullable: true
+        congestion:
+          $ref: "#/components/schemas/CongestionOut"
+        hourly:
+          type: array
+          items:
+            $ref: "#/components/schemas/HourlyOut"
+        recommendations:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecommendationOut"
+        demand:
+          $ref: "#/components/schemas/DemandOut"
+        commercial:
+          $ref: "#/components/schemas/CommercialOut"
+        weather:
+          $ref: "#/components/schemas/WeatherOut"
+
+    SearchResultOut:
+      type: object
+      required:
+        [area_id, area_cd, name, category, lat, lng, congestion_level, congestion_score]
+      properties:
+        area_id:
+          type: integer
+        area_cd:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+          nullable: true
+        lat:
+          type: number
+          format: float
+          nullable: true
+        lng:
+          type: number
+          format: float
+          nullable: true
+        congestion_level:
+          type: string
+          nullable: true
+        congestion_score:
+          type: number
+          format: float
+          nullable: true
+
+    SearchOut:
+      type: object
+      required: [query, results]
+      properties:
+        query:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResultOut"

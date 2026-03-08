@@ -1,0 +1,7 @@
+/venv
+.env
+/example
+/DB_structure
+__pycache__/
+*.pyc
+*.pyo
