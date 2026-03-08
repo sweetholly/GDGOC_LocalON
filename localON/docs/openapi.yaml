@@ -2,6 +2,7 @@ openapi: 3.0.3
 info:
   title: LOCAL ON API
   version: 1.0.0
+<<<<<<< HEAD
   description: |
     LOCAL ON API는 서울 주요 지역의 실시간 혼잡/수요/날씨/트렌드 정보를 제공합니다.
     프론트엔드 조회 시나리오에 맞춰 메인, 지역상세, 검색 중심으로 구성된 Read API입니다.
@@ -14,24 +15,39 @@ info:
     검증/오류 규칙:
     - 경로/쿼리 파라미터 검증 실패: HTTP 422
     - 리소스 미존재: HTTP 404
+=======
+  description: Real-time Seoul area status API
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
 servers:
   - url: http://localhost:8000
 tags:
   - name: main
+<<<<<<< HEAD
     description: 메인 화면에 필요한 집계 데이터 API
   - name: areas
     description: 특정 지역 상세 데이터 API
   - name: search
     description: 키워드 기반 지역 검색 API
+=======
+    description: Main screen data
+  - name: areas
+    description: Area detail data
+  - name: search
+    description: Area search
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
 paths:
   /main:
     get:
       tags: [main]
+<<<<<<< HEAD
       summary: 메인 화면 데이터 조회
       description: |
         메인 화면에 필요한 지역 요약 목록과 트렌드 정보를 반환합니다.
         `lat`, `lng`를 함께 전달하면 거리 기반 정렬(가능한 항목에 한함)이 적용됩니다.
         위치 정보가 없으면 서버 기본 정렬 기준으로 반환됩니다. (활성된 120개 지역 반환)
+=======
+      summary: Get main screen data
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       parameters:
         - in: query
           name: lat
@@ -39,23 +55,35 @@ paths:
           schema:
             type: number
             format: float
+<<<<<<< HEAD
           description: 사용자 위도(WGS84)
           example: 37.4979
+=======
+          description: User latitude
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
         - in: query
           name: lng
           required: false
           schema:
             type: number
             format: float
+<<<<<<< HEAD
           description: 사용자 경도(WGS84)
           example: 127.0276
       responses:
         "200":
           description: 메인 화면 응답
+=======
+          description: User longitude
+      responses:
+        "200":
+          description: Main data
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/MainOut"
+<<<<<<< HEAD
               example:
                 areas:
                   - area_id: 1
@@ -87,31 +115,47 @@ paths:
                       change_label: 급상승
         "422":
           description: 검증 오류(쿼리 타입/형식 오류)
+=======
+        "400":
+          description: Invalid request
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorOut"
+<<<<<<< HEAD
               example:
                 error: BAD_REQUEST
                 message: "lat 값 형식이 올바르지 않습니다"
         "500":
           description: 서버 내부 오류
+=======
+        "500":
+          description: Internal server error
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorOut"
+<<<<<<< HEAD
               example:
                 error: INTERNAL_ERROR
                 message: 서버 내부 오류가 발생했습니다
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
 
   /areas/{area_id}:
     get:
       tags: [areas]
+<<<<<<< HEAD
       summary: 지역 상세 조회
       description: |
         단일 지역의 상세 정보를 반환합니다.
         혼잡도, 시간대 그래프, 추천 방문시간, 수요, 상권, 날씨가 포함됩니다.
         `date`를 지정하면 해당 일자의 시간대 데이터를 조회합니다.
+=======
+      summary: Get area detail
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       parameters:
         - in: path
           name: area_id
@@ -119,23 +163,35 @@ paths:
           schema:
             type: integer
             minimum: 1
+<<<<<<< HEAD
           description: 지역 ID(1 이상의 정수)
           example: 1
+=======
+          description: Area ID
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
         - in: query
           name: date
           required: false
           schema:
             type: string
             format: date
+<<<<<<< HEAD
           description: 시간대 데이터 조회 기준일(YYYY-MM-DD)
           example: "2026-03-08"
       responses:
         "200":
           description: 지역 상세 응답
+=======
+          description: Date for hourly data query (default is today)
+      responses:
+        "200":
+          description: Area detail data
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AreaDetailOut"
+<<<<<<< HEAD
               example:
                 area_id: 1
                 area_cd: POI001
@@ -194,39 +250,60 @@ paths:
                   pm10_index: 보통
         "422":
           description: 검증 오류(경로/쿼리 형식 오류)
+=======
+        "400":
+          description: Invalid request
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorOut"
+<<<<<<< HEAD
               example:
                 error: BAD_REQUEST
                 message: "area_id는 1 이상의 정수여야 합니다"
         "404":
           description: 대상 지역 없음
+=======
+        "404":
+          description: Area not found
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorOut"
+<<<<<<< HEAD
               example:
                 error: NOT_FOUND
                 message: 해당 지역을 찾을 수 없습니다
         "500":
           description: 서버 내부 오류
+=======
+        "500":
+          description: Internal server error
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorOut"
+<<<<<<< HEAD
               example:
                 error: INTERNAL_ERROR
                 message: 서버 내부 오류가 발생했습니다
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
 
   /search:
     get:
       tags: [search]
+<<<<<<< HEAD
       summary: 지역 검색
       description: |
         키워드로 활성 지역을 검색합니다.
         결과 정렬/우선순위는 서버 검색 로직(완전일치/별칭/부분일치)에 따릅니다.
+=======
+      summary: Search areas
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       parameters:
         - in: query
           name: q
@@ -234,15 +311,23 @@ paths:
           schema:
             type: string
             minLength: 1
+<<<<<<< HEAD
           description: 검색 키워드(빈 문자열 불가)
           example: 홍대
       responses:
         "200":
           description: 검색 결과 응답
+=======
+          description: Search keyword
+      responses:
+        "200":
+          description: Search results
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/SearchOut"
+<<<<<<< HEAD
               example:
                 query: 홍대
                 results:
@@ -256,32 +341,48 @@ paths:
                     congestion_score: 65.0
         "422":
           description: 검증 오류(누락/빈값/형식 오류)
+=======
+        "400":
+          description: Invalid request
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorOut"
+<<<<<<< HEAD
               example:
                 error: BAD_REQUEST
                 message: "q 파라미터는 필수입니다"
         "500":
           description: 서버 내부 오류
+=======
+        "500":
+          description: Internal server error
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorOut"
+<<<<<<< HEAD
               example:
                 error: INTERNAL_ERROR
                 message: 서버 내부 오류가 발생했습니다
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
 
 components:
   schemas:
     ErrorOut:
       type: object
+<<<<<<< HEAD
       description: API 오류 응답 공통 포맷
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required: [error, message]
       properties:
         error:
           type: string
+<<<<<<< HEAD
           description: 오류 코드
         message:
           type: string
@@ -293,6 +394,13 @@ components:
     AreaSummaryOut:
       type: object
       description: "`/main`의 지역 목록에 사용되는 지역 요약 정보"
+=======
+        message:
+          type: string
+
+    AreaSummaryOut:
+      type: object
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required:
         [
           area_id,
@@ -313,6 +421,7 @@ components:
       properties:
         area_id:
           type: integer
+<<<<<<< HEAD
           description: 내부 지역 식별자
         area_cd:
           type: string
@@ -320,6 +429,12 @@ components:
         name:
           type: string
           description: 지역명
+=======
+        area_cd:
+          type: string
+        name:
+          type: string
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
         category:
           type: string
           nullable: true
@@ -334,12 +449,18 @@ components:
         congestion_level:
           type: string
           nullable: true
+<<<<<<< HEAD
           description: 혼잡도 레벨(문자형)
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
         congestion_score:
           type: number
           format: float
           nullable: true
+<<<<<<< HEAD
           description: 혼잡도 점수(수치형)
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
         population_min:
           type: integer
           nullable: true
@@ -356,16 +477,25 @@ components:
         distance_m:
           type: integer
           nullable: true
+<<<<<<< HEAD
           description: 사용자 위치 기준 거리(m), 위치 미입력 시 null
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
         updated_at:
           type: string
           format: date-time
           nullable: true
+<<<<<<< HEAD
           description: 최신 지표 갱신 시각
 
     HotPlaceOut:
       type: object
       description: 인기 지역 트렌드 순위 항목
+=======
+
+    HotPlaceOut:
+      type: object
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required: [rank, area_id, name, congestion_level, congestion_score, rank_change]
       properties:
         rank:
@@ -387,7 +517,10 @@ components:
 
     RisingOut:
       type: object
+<<<<<<< HEAD
       description: 상승 지역 트렌드 항목
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required: [area_id, name, change_pct, change_label]
       properties:
         area_id:
@@ -406,7 +539,10 @@ components:
 
     TrendsOut:
       type: object
+<<<<<<< HEAD
       description: 메인 응답의 트렌드 블록
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required: [hot_places, rising]
       properties:
         hot_places:
@@ -420,7 +556,10 @@ components:
 
     MainOut:
       type: object
+<<<<<<< HEAD
       description: "`/main` 최상위 응답 객체"
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required: [areas, trends]
       properties:
         areas:
@@ -429,6 +568,7 @@ components:
             $ref: "#/components/schemas/AreaSummaryOut"
         trends:
           $ref: "#/components/schemas/TrendsOut"
+<<<<<<< HEAD
       example:
         areas:
           - area_id: 1
@@ -462,6 +602,11 @@ components:
     CongestionOut:
       type: object
       description: 지역 상세 응답의 혼잡도 블록
+=======
+
+    CongestionOut:
+      type: object
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required:
         [
           level,
@@ -499,7 +644,10 @@ components:
           nullable: true
         is_estimated:
           type: boolean
+<<<<<<< HEAD
           description: 일부 값이 추정치인 경우 true
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
         updated_at:
           type: string
           format: date-time
@@ -507,7 +655,10 @@ components:
 
     HourlyOut:
       type: object
+<<<<<<< HEAD
       description: 선택한 날짜의 시간대별 데이터 포인트
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required: [hour, actual, baseline, level]
       properties:
         hour:
@@ -524,7 +675,10 @@ components:
 
     RecommendationOut:
       type: object
+<<<<<<< HEAD
       description: 추천 방문 시간대 항목
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required: [time_range, expected_level, avg_population]
       properties:
         time_range:
@@ -536,7 +690,10 @@ components:
 
     DemographicsOut:
       type: object
+<<<<<<< HEAD
       description: 성별/연령대 인구 구성 비율
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required:
         [
           male_rate,
@@ -594,7 +751,10 @@ components:
 
     DemandOut:
       type: object
+<<<<<<< HEAD
       description: 인구 지표 기반 수요 해석 블록
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required: [type, resident_rate, non_resident_rate, demographics]
       properties:
         type:
@@ -612,7 +772,10 @@ components:
 
     CommercialOut:
       type: object
+<<<<<<< HEAD
       description: 지역 상권 요약 정보
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required: [level, payment_cnt, payment_amt_min, payment_amt_max]
       properties:
         level:
@@ -630,7 +793,10 @@ components:
 
     WeatherOut:
       type: object
+<<<<<<< HEAD
       description: 지역 날씨/대기질 요약 정보
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required:
         [temp, sensible_temp, humidity, wind_spd, pm25, pm25_index, pm10, pm10_index]
       properties:
@@ -666,7 +832,10 @@ components:
 
     AreaDetailOut:
       type: object
+<<<<<<< HEAD
       description: "`/areas/{area_id}` 최상위 응답 객체"
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required:
         [
           area_id,
@@ -720,6 +889,7 @@ components:
           $ref: "#/components/schemas/CommercialOut"
         weather:
           $ref: "#/components/schemas/WeatherOut"
+<<<<<<< HEAD
       example:
         area_id: 1
         area_cd: POI001
@@ -780,6 +950,11 @@ components:
     SearchResultOut:
       type: object
       description: 검색 결과 단일 항목
+=======
+
+    SearchResultOut:
+      type: object
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required:
         [area_id, area_cd, name, category, lat, lng, congestion_level, congestion_score]
       properties:
@@ -810,7 +985,10 @@ components:
 
     SearchOut:
       type: object
+<<<<<<< HEAD
       description: "`/search` 최상위 응답 객체"
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
       required: [query, results]
       properties:
         query:
@@ -819,6 +997,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SearchResultOut"
+<<<<<<< HEAD
       example:
         query: 홍대
         results:
@@ -830,3 +1009,5 @@ components:
             lng: 126.922
             congestion_level: 약간 붐빔
             congestion_score: 65.0
+=======
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83

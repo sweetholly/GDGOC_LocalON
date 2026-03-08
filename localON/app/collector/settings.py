@@ -43,6 +43,11 @@ class CollectorSettings:
             ),
             sdot_service_name=os.getenv("SDOT_SERVICE_NAME", "sDoTPeople"),
             sdot_limit=int(os.getenv("SDOT_LIMIT", "1000")),
+<<<<<<< HEAD
             interval_seconds=int(os.getenv("COLLECTOR_INTERVAL_SECONDS", "600")),
             timeout_seconds=float(os.getenv("COLLECTOR_TIMEOUT_SECONDS", "10")),
+=======
+            interval_seconds=int(os.getenv("COLLECTOR_INTERVAL_SECONDS", "300")),
+            timeout_seconds=float(os.getenv("COLLECTOR_TIMEOUT_SECONDS", "15")),
+>>>>>>> 0ae59683f20e6d0fde262362acbc80197da2ce83
         )
