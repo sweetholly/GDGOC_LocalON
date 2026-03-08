@@ -22,6 +22,9 @@ class HourlyOut(BaseModel):
     actual: int | None
     baseline: int | None
     level: str | None
+    actual_avg: float | None = None
+    actual_min: int | None = None
+    actual_max: int | None = None
 
 
 class RecommendationOut(BaseModel):

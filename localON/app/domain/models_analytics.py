@@ -193,6 +193,33 @@ class AreaHourlyTimeseries(Base):
     )
 
 
+class AreaHourlySample(Base):
+    __tablename__ = "area_hourly_samples"
+    __table_args__ = (
+        Index("idx_ahs_area_date_hour", "area_id", "stat_date", "hour"),
+        Index("idx_ahs_area_sample_time", "area_id", "sample_time"),
+    )
+
+    sample_id: Mapped[Any] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    area_id: Mapped[Any] = mapped_column(
+        Integer, ForeignKey("areas.area_id", ondelete="CASCADE"), nullable=False
+    )
+    stat_date: Mapped[Any] = mapped_column(Date, nullable=False)
+    hour: Mapped[Any] = mapped_column(SmallInteger, nullable=False)
+    sample_time: Mapped[Any] = mapped_column(DateTime, nullable=False)
+    actual_count: Mapped[Any] = mapped_column(Integer, nullable=True)
+    baseline_count: Mapped[Any] = mapped_column(Integer, nullable=True)
+    citydata_ppltn_min: Mapped[Any] = mapped_column(Integer, nullable=True)
+    citydata_ppltn_max: Mapped[Any] = mapped_column(Integer, nullable=True)
+    congestion_level: Mapped[Any] = mapped_column(String(10), nullable=True)
+    is_estimated: Mapped[Any] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[Any] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+
 class TrendHotPlace(Base):
     __tablename__ = "trend_hot_places"
     __table_args__ = (Index("idx_thp_area", "area_id"),)

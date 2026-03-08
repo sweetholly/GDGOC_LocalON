@@ -1,7 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import re
 from datetime import timedelta
 from decimal import Decimal
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.domain import (
     Area,
     AreaAlias,
+    AreaHourlySample,
     AreaHourlyTimeseries,
     AreaLiveMetric,
     AreaSdotRegionMapping,
@@ -243,9 +245,30 @@ class SeoulDataCollector:
         if not container:
             container = extract_openapi_container(payload, preferred_key="citydata")
 
-        rows = container.get("row", []) if isinstance(container, dict) else []
-        row = rows[0] if rows and isinstance(rows[0], dict) else {}
-        result = container.get("RESULT", {}) if isinstance(container, dict) else {}
+        row: dict[str, Any] = {}
+        result: dict[str, Any] = {}
+        if isinstance(container, dict):
+            result = as_dict(pick_first(container, "RESULT", "Result"))
+
+            citydata = pick_first(container, "CITYDATA", "citydata")
+            if isinstance(citydata, dict):
+                row = citydata
+            elif isinstance(citydata, list):
+                row = as_dict(citydata)
+
+            if row and "AREA_CD" not in row:
+                nested_rows = pick_first(row, "row", "ROW")
+                if isinstance(nested_rows, dict):
+                    row = nested_rows
+                elif isinstance(nested_rows, list):
+                    row = as_dict(nested_rows)
+
+            if not row:
+                rows = pick_first(container, "row", "ROW")
+                if isinstance(rows, dict):
+                    row = rows
+                elif isinstance(rows, list):
+                    row = as_dict(rows)
 
         fetched_at = self._extract_citydata_time(row) or now_utc_naive()
         raw = RawCitydataResponse(
@@ -253,8 +276,12 @@ class SeoulDataCollector:
             request_area_nm=area.area_nm,
             request_area_cd=area.area_cd,
             fetched_at=fetched_at,
-            result_code=normalize_text(pick_first(result, "CODE", "resultCode")),
-            result_message=normalize_text(pick_first(result, "MESSAGE", "resultMsg")),
+            result_code=normalize_text(
+                pick_first(result, "CODE", "RESULT.CODE", "resultCode")
+            ),
+            result_message=normalize_text(
+                pick_first(result, "MESSAGE", "RESULT.MESSAGE", "resultMsg")
+            ),
             payload_json=payload,
             payload_hash=hash_payload(payload),
         )
@@ -328,8 +355,16 @@ class SeoulDataCollector:
     ) -> CitydataLivePopulation | None:
         """LIVE_PPLTN_STTS에서 인구 요약 데이터를 매핑한다."""
         section = as_dict(pick_first(row, "LIVE_PPLTN_STTS", "live_ppltn_stts"))
+        section = self._unwrap_single_wrapper(
+            section, "LIVE_PPLTN_STTS", "live_ppltn_stts"
+        )
         source = section or row
         fcst_payload = pick_first(source, "FCST_PPLTN", "FCST_PPLTN_LIST")
+        fcst_container = as_dict(fcst_payload)
+        if fcst_container:
+            nested_fcst = pick_first(fcst_container, "FCST_PPLTN", "row", "ROW")
+            if nested_fcst is not None:
+                fcst_payload = nested_fcst
         fcst_first = as_dict(fcst_payload)
 
         payload = CitydataLivePopulation(
@@ -374,6 +409,9 @@ class SeoulDataCollector:
     ) -> CitydataLiveCommercialSummary | None:
         """LIVE_CMRCL_STTS에서 상권 요약 데이터를 매핑한다."""
         section = as_dict(pick_first(row, "LIVE_CMRCL_STTS", "live_cmrcl_stts"))
+        section = self._unwrap_single_wrapper(
+            section, "LIVE_CMRCL_STTS", "live_cmrcl_stts"
+        )
         if not section:
             return None
 
@@ -418,19 +456,20 @@ class SeoulDataCollector:
         section = as_dict(pick_first(row, "ROAD_TRAFFIC_STTS", "road_traffic_stts"))
         if not section:
             return None
+        source = as_dict(pick_first(section, "AVG_ROAD_DATA", "avg_road_data")) or section
 
         payload = CitydataRoadSummary(
             snapshot_id=snapshot_id,
             source_updated_at=to_datetime(
-                pick_first(section, "ROAD_TRAFFIC_TIME", "UPDATE_TIME")
+                pick_first(source, "ROAD_TRAFFIC_TIME", "UPDATE_TIME")
             ),
             road_traffic_spd=to_decimal(
-                pick_first(section, "ROAD_TRAFFIC_SPD", "AVG_SPD", "ROAD_AVG_SPD")
+                pick_first(source, "ROAD_TRAFFIC_SPD", "AVG_SPD", "ROAD_AVG_SPD")
             ),
             road_traffic_idx=normalize_text(
-                pick_first(section, "ROAD_TRAFFIC_IDX", "ROAD_TRAFFIC_INDEX")
+                pick_first(source, "ROAD_TRAFFIC_IDX", "ROAD_TRAFFIC_INDEX")
             ),
-            road_msg=normalize_text(pick_first(section, "ROAD_MSG", "ROAD_TRAFFIC_MSG")),
+            road_msg=normalize_text(pick_first(source, "ROAD_MSG", "ROAD_TRAFFIC_MSG")),
         )
         if self._is_empty_model(payload, ignore_fields={"snapshot_id"}):
             return None
@@ -441,6 +480,7 @@ class SeoulDataCollector:
     ) -> CitydataWeatherCurrent | None:
         """WEATHER_STTS에서 날씨 요약 데이터를 매핑한다."""
         section = as_dict(pick_first(row, "WEATHER_STTS", "weather_stts"))
+        section = self._unwrap_single_wrapper(section, "WEATHER_STTS", "weather_stts")
         if not section:
             return None
 
@@ -510,8 +550,14 @@ class SeoulDataCollector:
             mapping_by_region, area_lookup, area_has_primary = await self._prepare_region_context(
                 session
             )
+            sensor_area_lookup = await self._build_sensor_area_lookup(session)
 
             for row in rows:
+                source_serial = normalize_text(
+                    pick_first(row, "SERIAL_NO", "SERIAL", "DEVICE_ID")
+                )
+                normalized_sensor_code = self._normalize_sensor_code(source_serial)
+
                 region_name = normalize_text(
                     pick_first(
                         row,
@@ -535,6 +581,10 @@ class SeoulDataCollector:
                     area_lookup=area_lookup,
                     area_has_primary=area_has_primary,
                 )
+                if resolved_area_id is None and normalized_sensor_code:
+                    sensor_mapped = sensor_area_lookup.get(normalized_sensor_code)
+                    if sensor_mapped:
+                        resolved_area_id, confidence = sensor_mapped
 
                 record = SdotTrafficRaw(
                     sdot_region_key=region_key or "UNKNOWN",
@@ -556,9 +606,7 @@ class SeoulDataCollector:
                     )
                     or fetched_at,
                     fetched_at=fetched_at,
-                    source_serial=normalize_text(
-                        pick_first(row, "SERIAL_NO", "SERIAL", "DEVICE_ID", "시리얼번호")
-                    ),
+                    source_serial=normalized_sensor_code or source_serial,
                     quality_flag=normalize_text(
                         pick_first(row, "QUALITY_FLAG", "DATA_QUALITY", "STATUS")
                     ),
@@ -667,6 +715,113 @@ class SeoulDataCollector:
                 lookup[key] = area_id
         return lookup
 
+    async def _build_sensor_area_lookup(
+        self, session: AsyncSession
+    ) -> dict[str, tuple[int, Decimal]]:
+        """Build SENSOR_CODE -> nearest area_id mapping using seed coordinates."""
+        max_distance_m = self.settings.sdot_sensor_max_distance_m
+        if max_distance_m <= 0:
+            return {}
+
+        areas = (
+            await session.scalars(
+                select(Area).where(
+                    Area.is_active.is_(True),
+                    Area.lat.is_not(None),
+                    Area.lng.is_not(None),
+                )
+            )
+        ).all()
+        if not areas:
+            return {}
+
+        area_points = [
+            (area.area_id, float(area.lat), float(area.lng))
+            for area in areas
+            if area.lat is not None and area.lng is not None
+        ]
+        if not area_points:
+            return {}
+
+        lookup: dict[str, tuple[int, Decimal]] = {}
+        for sensor in SEOUL_SDOT_SENSOR_META:
+            sensor_code = self._normalize_sensor_code(
+                pick_first(sensor, "SENSOR_CODE", "sensor_code")
+            )
+            if not sensor_code or sensor_code in lookup:
+                continue
+
+            sensor_lat = to_decimal(pick_first(sensor, "LAT", "lat"))
+            sensor_lng = to_decimal(pick_first(sensor, "LNG", "lng"))
+            if sensor_lat is None or sensor_lng is None:
+                continue
+
+            sensor_lat_f = float(sensor_lat)
+            sensor_lng_f = float(sensor_lng)
+            best_area_id: int | None = None
+            best_distance: float | None = None
+
+            for area_id, area_lat, area_lng in area_points:
+                distance = self._haversine_distance_m(
+                    sensor_lat_f, sensor_lng_f, area_lat, area_lng
+                )
+                if best_distance is None or distance < best_distance:
+                    best_distance = distance
+                    best_area_id = area_id
+
+            if (
+                best_area_id is None
+                or best_distance is None
+                or best_distance > max_distance_m
+            ):
+                continue
+
+            confidence = self._distance_to_confidence(
+                best_distance, max_distance_m=max_distance_m
+            )
+            lookup[sensor_code] = (best_area_id, confidence)
+
+        return lookup
+
+    def _normalize_sensor_code(self, value: Any) -> str | None:
+        """Normalize sensor code into a zero-padded 11-digit string."""
+        text = normalize_text(value)
+        if text is None:
+            return None
+        digits = "".join(ch for ch in text if ch.isdigit())
+        if not digits:
+            return None
+        try:
+            return f"{int(digits):011d}"
+        except ValueError:
+            return None
+
+    def _distance_to_confidence(
+        self, distance_m: float, *, max_distance_m: int
+    ) -> Decimal:
+        """Convert distance to confidence score."""
+        if max_distance_m <= 0:
+            return Decimal("0.55")
+        ratio = min(1.0, max(0.0, distance_m / float(max_distance_m)))
+        score = 0.95 - (0.40 * ratio)
+        return Decimal(str(round(score, 2)))
+
+    def _haversine_distance_m(
+        self, lat1: float, lng1: float, lat2: float, lng2: float
+    ) -> float:
+        """Calculate great-circle distance in meters."""
+        earth_radius_m = 6_371_000.0
+        phi1 = math.radians(lat1)
+        phi2 = math.radians(lat2)
+        d_phi = math.radians(lat2 - lat1)
+        d_lambda = math.radians(lng2 - lng1)
+
+        a = (
+            math.sin(d_phi / 2) ** 2
+            + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+        )
+        return 2 * earth_radius_m * math.asin(math.sqrt(a))
+
     async def _refresh_area_live_metrics(self, session: AsyncSession) -> None:
         """최신 도시데이터 + 센서데이터를 통합해 area_live_metrics를 갱신한다."""
         now = now_utc_naive()
@@ -677,6 +832,7 @@ class SeoulDataCollector:
         ).all()
 
         confidence_map = await self._load_mapping_confidence_map(session)
+        sensor_area_lookup = await self._build_sensor_area_lookup(session)
         for area in areas:
             snapshot = await session.scalar(
                 select(CitydataSnapshot)
@@ -741,6 +897,12 @@ class SeoulDataCollector:
             metric.mapping_confidence = (
                 confidence_map.get(sdot_latest.sdot_region_key) if sdot_latest else None
             )
+            if metric.mapping_confidence is None and sdot_latest and sdot_latest.source_serial:
+                sensor_mapped = sensor_area_lookup.get(
+                    self._normalize_sensor_code(sdot_latest.source_serial) or ""
+                )
+                if sensor_mapped and sensor_mapped[0] == area.area_id:
+                    metric.mapping_confidence = sensor_mapped[1]
 
             metric.commercial_level = live_cmrcl.area_cmrcl_lvl if live_cmrcl else None
             metric.payment_cnt = live_cmrcl.area_sh_payment_cnt if live_cmrcl else None
@@ -788,6 +950,14 @@ class SeoulDataCollector:
         )
         stat_date = reference_time.date()
         hour = reference_time.hour
+        actual_count = (
+            sdot_latest.visitor_count
+            if sdot_latest and sdot_latest.visitor_count is not None
+            else self._estimate_citydata_count(live_pop)
+        )
+        citydata_ppltn_min = live_pop.area_ppltn_min if live_pop else None
+        citydata_ppltn_max = live_pop.area_ppltn_max if live_pop else None
+        congestion_level = live_pop.area_congest_lvl if live_pop else None
 
         timeseries = await session.scalar(
             select(AreaHourlyTimeseries).where(
@@ -804,15 +974,26 @@ class SeoulDataCollector:
             )
             session.add(timeseries)
 
-        timeseries.actual_count = (
-            sdot_latest.visitor_count
-            if sdot_latest and sdot_latest.visitor_count is not None
-            else self._estimate_citydata_count(live_pop)
-        )
+        timeseries.actual_count = actual_count
         timeseries.baseline_count = baseline_count
-        timeseries.citydata_ppltn_min = live_pop.area_ppltn_min if live_pop else None
-        timeseries.citydata_ppltn_max = live_pop.area_ppltn_max if live_pop else None
-        timeseries.congestion_level = live_pop.area_congest_lvl if live_pop else None
+        timeseries.citydata_ppltn_min = citydata_ppltn_min
+        timeseries.citydata_ppltn_max = citydata_ppltn_max
+        timeseries.congestion_level = congestion_level
+
+        session.add(
+            AreaHourlySample(
+                area_id=area_id,
+                stat_date=stat_date,
+                hour=hour,
+                sample_time=reference_time,
+                actual_count=actual_count,
+                baseline_count=baseline_count,
+                citydata_ppltn_min=citydata_ppltn_min,
+                citydata_ppltn_max=citydata_ppltn_max,
+                congestion_level=congestion_level,
+                is_estimated=snapshot is None or sdot_latest is None,
+            )
+        )
 
     def _estimate_citydata_count(
         self, live_pop: CitydataLivePopulation | None
@@ -869,7 +1050,11 @@ class SeoulDataCollector:
     def _extract_citydata_time(self, row: dict[str, Any]) -> Any:
         """도시데이터 row에서 시각 컬럼 후보를 우선순위로 추출한다."""
         live_pop = as_dict(pick_first(row, "LIVE_PPLTN_STTS", "live_ppltn_stts"))
+        live_pop = self._unwrap_single_wrapper(
+            live_pop, "LIVE_PPLTN_STTS", "live_ppltn_stts"
+        )
         weather = as_dict(pick_first(row, "WEATHER_STTS", "weather_stts"))
+        weather = self._unwrap_single_wrapper(weather, "WEATHER_STTS", "weather_stts")
         return to_datetime(
             pick_first(
                 row,
@@ -880,6 +1065,20 @@ class SeoulDataCollector:
                 pick_first(weather, "WEATHER_TIME"),
             )
         )
+
+    def _unwrap_single_wrapper(
+        self, section: dict[str, Any], *wrapper_keys: str
+    ) -> dict[str, Any]:
+        """Unwrap one-level wrapper key in OpenAPI payload sections."""
+        if not section or len(section) != 1:
+            return section
+        for key in wrapper_keys:
+            if key not in section:
+                continue
+            nested = as_dict(section.get(key))
+            if nested:
+                return nested
+        return section
 
     def _extract_gu_name(self, address: str | None) -> str | None:
         """설치 주소에서 자치구명을 추출한다."""

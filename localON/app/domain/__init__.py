@@ -19,6 +19,7 @@ from .database import (
 )
 from .models_analytics import (
     AreaCommercialBaseline,
+    AreaHourlySample,
     AreaHourlyTimeseries,
     AreaLiveMetric,
     AreaPopulationBaseline5m,
@@ -101,6 +102,7 @@ __all__ = [
     "AreaLiveMetric",
     "AreaPopulationBaseline5m",
     "AreaCommercialBaseline",
+    "AreaHourlySample",
     "AreaHourlyTimeseries",
     "TrendHotPlace",
     "TrendRisingRegion",

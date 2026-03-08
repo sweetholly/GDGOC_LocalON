@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import (
     Area,
+    AreaHourlySample,
     AreaHourlyTimeseries,
     AreaLiveMetric,
     AreaPopulationBaseline5m,
@@ -102,15 +103,88 @@ async def get_area_detail(
             .order_by(AreaHourlyTimeseries.hour)
         )
     ).scalars().all()
-    hourly = [
-        HourlyOut(
-            hour=row.hour,
-            actual=row.actual_count,
-            baseline=row.baseline_count,
-            level=row.congestion_level,
+    hourly_latest_by_hour = {int(row.hour): row for row in hourly_rows}
+
+    sample_rows = (
+        await session.execute(
+            select(AreaHourlySample)
+            .where(
+                AreaHourlySample.area_id == area_id,
+                AreaHourlySample.stat_date == target_date,
+            )
+            .order_by(
+                AreaHourlySample.hour,
+                AreaHourlySample.sample_time,
+                AreaHourlySample.sample_id,
+            )
         )
-        for row in hourly_rows
-    ]
+    ).scalars().all()
+
+    sample_latest_by_hour: dict[int, AreaHourlySample] = {}
+    sample_stats_by_hour: dict[int, dict[str, float | int]] = {}
+    for row in sample_rows:
+        hour = int(row.hour)
+        sample_latest_by_hour[hour] = row
+        if row.actual_count is None:
+            continue
+
+        bucket = sample_stats_by_hour.get(hour)
+        if bucket is None:
+            sample_stats_by_hour[hour] = {
+                "sum": float(row.actual_count),
+                "count": 1,
+                "min": int(row.actual_count),
+                "max": int(row.actual_count),
+            }
+            continue
+
+        bucket["sum"] = float(bucket["sum"]) + float(row.actual_count)
+        bucket["count"] = int(bucket["count"]) + 1
+        bucket["min"] = min(int(bucket["min"]), int(row.actual_count))
+        bucket["max"] = max(int(bucket["max"]), int(row.actual_count))
+
+    hourly: list[HourlyOut] = []
+    for hour in range(24):
+        sample_latest = sample_latest_by_hour.get(hour)
+        ts_latest = hourly_latest_by_hour.get(hour)
+
+        actual = (
+            sample_latest.actual_count
+            if sample_latest
+            else (ts_latest.actual_count if ts_latest else None)
+        )
+        baseline = (
+            sample_latest.baseline_count
+            if sample_latest
+            else (ts_latest.baseline_count if ts_latest else None)
+        )
+        level = (
+            sample_latest.congestion_level
+            if sample_latest
+            else (ts_latest.congestion_level if ts_latest else None)
+        )
+
+        stats = sample_stats_by_hour.get(hour)
+        if stats is not None and int(stats["count"]) > 0:
+            actual_avg = round(float(stats["sum"]) / int(stats["count"]), 2)
+            actual_min = int(stats["min"])
+            actual_max = int(stats["max"])
+        else:
+            actual_avg = float(actual) if actual is not None else None
+            actual_min = actual
+            actual_max = actual
+
+        hourly.append(
+            HourlyOut(
+                hour=hour,
+                actual=actual,
+                baseline=baseline,
+                level=level,
+                actual_avg=actual_avg,
+                actual_min=actual_min,
+                actual_max=actual_max,
+            )
+        )
 
     # ── 추천 방문 시간 (baseline_5m 기반, 오늘 요일 기준 최저 3개 시간대) ──
     today = date.today()

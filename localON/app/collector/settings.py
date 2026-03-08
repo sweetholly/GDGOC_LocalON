@@ -21,6 +21,7 @@ class CollectorSettings:
     sdot_url_template: str
     sdot_service_name: str
     sdot_limit: int
+    sdot_sensor_max_distance_m: int
     interval_seconds: int
     timeout_seconds: float
 
@@ -43,6 +44,9 @@ class CollectorSettings:
             ),
             sdot_service_name=os.getenv("SDOT_SERVICE_NAME", "sDoTPeople"),
             sdot_limit=int(os.getenv("SDOT_LIMIT", "1000")),
+            sdot_sensor_max_distance_m=int(
+                os.getenv("SDOT_SENSOR_MAX_DISTANCE_M", "3000")
+            ),
             interval_seconds=int(os.getenv("COLLECTOR_INTERVAL_SECONDS", "600")),
             timeout_seconds=float(os.getenv("COLLECTOR_TIMEOUT_SECONDS", "10")),
         )
