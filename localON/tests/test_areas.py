@@ -28,7 +28,8 @@ MOCK_AREA_DETAIL = AreaDetailOut(
     lng=127.0597,
     congestion=CongestionOut(
         level="보통",
-        score=50.0,
+        citydata_score=50.0,
+        sdot_score=61.25,
         msg="사람이 몰리는 시간대는 조금 혼잡할 수 있어요",
         population_min=32000,
         population_max=35000,
@@ -110,7 +111,8 @@ async def test_area_detail_congestion(client: AsyncClient):
 
     c = resp.json()["congestion"]
     assert c["level"] == "보통"
-    assert c["score"] == 50.0
+    assert c["citydata_score"] == 50.0
+    assert c["sdot_score"] == 61.25
     assert c["population_min"] == 32000
     assert c["population_max"] == 35000
     assert c["sdot_current"] == 245

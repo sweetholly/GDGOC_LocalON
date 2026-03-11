@@ -51,7 +51,8 @@ async def search_areas(session: AsyncSession, q: str) -> SearchOut:
             lat=float(area.lat) if area.lat is not None else None,
             lng=float(area.lng) if area.lng is not None else None,
             congestion_level=metric.congestion_level if metric else None,
-            congestion_score=float(metric.congestion_score) if metric and metric.congestion_score is not None else None,
+            citydata_score=float(metric.citydata_score) if metric and metric.citydata_score is not None else None,
+            sdot_score=float(metric.sdot_score) if metric and metric.sdot_score is not None else None,
         )
         for area, metric, _ in rows
     ]

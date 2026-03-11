@@ -13,7 +13,8 @@ class AreaSummaryOut(BaseModel):
     lat: float | None
     lng: float | None
     congestion_level: str | None
-    congestion_score: float | None
+    citydata_score: float | None
+    sdot_score: float | None
     population_min: int | None
     population_max: int | None
     weather_temp: float | None
@@ -27,7 +28,8 @@ class HotPlaceOut(BaseModel):
     area_id: int
     name: str
     congestion_level: str | None
-    congestion_score: float | None
+    citydata_score: float | None
+    sdot_score: float | None
     rank_change: int | None
 
 

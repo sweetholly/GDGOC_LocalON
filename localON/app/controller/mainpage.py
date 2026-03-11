@@ -52,7 +52,8 @@ async def get_main(
                 lat=float(area.lat) if area.lat is not None else None,
                 lng=float(area.lng) if area.lng is not None else None,
                 congestion_level=metric.congestion_level if metric else None,
-                congestion_score=float(metric.congestion_score) if metric and metric.congestion_score is not None else None,
+                citydata_score=float(metric.citydata_score) if metric and metric.citydata_score is not None else None,
+                sdot_score=float(metric.sdot_score) if metric and metric.sdot_score is not None else None,
                 population_min=metric.population_min if metric else None,
                 population_max=metric.population_max if metric else None,
                 weather_temp=float(metric.weather_temp) if metric and metric.weather_temp is not None else None,
@@ -83,7 +84,8 @@ async def get_main(
             area_id=hp.area_id,
             name=area.area_nm,
             congestion_level=hp.congestion_level,
-            congestion_score=float(hp.congestion_score) if hp.congestion_score is not None else None,
+            citydata_score=float(hp.citydata_score) if hp.citydata_score is not None else None,
+            sdot_score=float(hp.sdot_score) if hp.sdot_score is not None else None,
             rank_change=hp.rank_change,
         )
         for hp, area in hp_rows

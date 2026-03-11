@@ -7,7 +7,8 @@ from pydantic import BaseModel
 
 class CongestionOut(BaseModel):
     level: str | None
-    score: float | None
+    citydata_score: float | None
+    sdot_score: float | None
     msg: str | None
     population_min: int | None
     population_max: int | None

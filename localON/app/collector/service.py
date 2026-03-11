@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import logging
@@ -915,11 +915,14 @@ class SeoulDataCollector:
             metric.weather_temp = weather.temp if weather else None
             metric.air_idx = weather.air_idx if weather else None
 
-            metric.congestion_score = self._calculate_congestion_score(
+            city_score, sensor_score, combined_score = self._calculate_scores(
                 congestion_level=metric.congestion_level,
                 current_count=metric.sdot_current_count,
                 baseline_count=metric.sdot_baseline_count,
             )
+            metric.citydata_score = city_score
+            metric.sdot_score = sensor_score
+            metric.congestion_score = combined_score
             metric.is_estimated = snapshot is None or sdot_latest is None
 
             await self._upsert_hourly_timeseries(
@@ -1122,14 +1125,14 @@ class SeoulDataCollector:
             run.error_message = " | ".join(error_messages[:3])
         await session.flush()
 
-    def _calculate_congestion_score(
+    def _calculate_scores(
         self,
         *,
         congestion_level: str | None,
         current_count: int | None,
         baseline_count: int | None,
-    ) -> Decimal | None:
-        """도시데이터 혼잡도 + 센서 비율을 조합해 0~100 점수를 산출한다."""
+    ) -> tuple[Decimal | None, Decimal | None, Decimal | None]:
+        """도시데이터 점수, 센서 점수, 합산 점수를 각각 산출한다."""
         level_score_map = {
             "여유": Decimal("25"),
             "보통": Decimal("50"),
@@ -1155,13 +1158,19 @@ class SeoulDataCollector:
             ratio = Decimal(current_count) / Decimal(baseline_count)
             sensor_score = max(Decimal("0"), min(Decimal("100"), ratio * Decimal("50")))
 
+        combined: Decimal | None = None
         if level_score is not None and sensor_score is not None:
-            return ((level_score + sensor_score) / Decimal("2")).quantize(Decimal("0.01"))
-        if level_score is not None:
-            return level_score.quantize(Decimal("0.01"))
-        if sensor_score is not None:
-            return sensor_score.quantize(Decimal("0.01"))
-        return None
+            combined = ((level_score + sensor_score) / Decimal("2")).quantize(Decimal("0.01"))
+        elif level_score is not None:
+            combined = level_score.quantize(Decimal("0.01"))
+        elif sensor_score is not None:
+            combined = sensor_score.quantize(Decimal("0.01"))
+
+        return (
+            level_score.quantize(Decimal("0.01")) if level_score is not None else None,
+            sensor_score.quantize(Decimal("0.01")) if sensor_score is not None else None,
+            combined,
+        )
 
     def _is_empty_model(self, obj: Any, *, ignore_fields: set[str]) -> bool:
         """모델 객체에 의미 있는 값이 없는지 확인한다."""

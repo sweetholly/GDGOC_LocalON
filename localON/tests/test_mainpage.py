@@ -17,7 +17,8 @@ AREA_1 = AreaSummaryOut(
     lat=37.5130,
     lng=127.0597,
     congestion_level="보통",
-    congestion_score=50.0,
+    citydata_score=50.0,
+    sdot_score=61.25,
     population_min=32000,
     population_max=35000,
     weather_temp=12.5,
@@ -34,7 +35,8 @@ AREA_2 = AreaSummaryOut(
     lat=37.5701,
     lng=126.9769,
     congestion_level="여유",
-    congestion_score=20.0,
+    citydata_score=25.0,
+    sdot_score=None,
     population_min=5000,
     population_max=8000,
     weather_temp=11.0,
@@ -52,7 +54,8 @@ MOCK_MAIN_OUT = MainOut(
                 area_id=1,
                 name="강남 MICE 관광특구",
                 congestion_level="붐빔",
-                congestion_score=88.5,
+                citydata_score=90.0,
+                sdot_score=87.0,
                 rank_change=2,
             )
         ],
@@ -98,7 +101,8 @@ async def test_main_area_fields(client: AsyncClient):
     assert area["area_cd"] == "POI001"
     assert area["name"] == "강남 MICE 관광특구"
     assert area["congestion_level"] == "보통"
-    assert area["congestion_score"] == 50.0
+    assert area["citydata_score"] == 50.0
+    assert area["sdot_score"] == 61.25
 
 
 @pytest.mark.asyncio
@@ -130,7 +134,8 @@ async def test_main_hot_places(client: AsyncClient):
     hot = resp.json()["trends"]["hot_places"][0]
     assert hot["rank"] == 1
     assert hot["rank_change"] == 2
-    assert hot["congestion_score"] == 88.5
+    assert hot["citydata_score"] == 90.0
+    assert hot["sdot_score"] == 87.0
 
 
 @pytest.mark.asyncio

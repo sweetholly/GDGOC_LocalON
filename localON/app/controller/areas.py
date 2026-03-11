@@ -226,7 +226,8 @@ async def get_area_detail(
         lng=float(area_row.lng) if area_row.lng is not None else None,
         congestion=CongestionOut(
             level=metric.congestion_level if metric else None,
-            score=float(metric.congestion_score) if metric and metric.congestion_score is not None else None,
+            citydata_score=float(metric.citydata_score) if metric and metric.citydata_score is not None else None,
+            sdot_score=float(metric.sdot_score) if metric and metric.sdot_score is not None else None,
             msg=metric.congestion_msg if metric else None,
             population_min=metric.population_min if metric else None,
             population_max=metric.population_max if metric else None,

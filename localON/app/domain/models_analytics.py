@@ -93,6 +93,8 @@ class AreaLiveMetric(Base):
     base_time: Mapped[Any] = mapped_column(DateTime, nullable=True)
     congestion_level: Mapped[Any] = mapped_column(String(10), nullable=True)
     congestion_score: Mapped[Any] = mapped_column(Numeric(5, 2), nullable=True)
+    citydata_score: Mapped[Any] = mapped_column(Numeric(5, 2), nullable=True)
+    sdot_score: Mapped[Any] = mapped_column(Numeric(5, 2), nullable=True)
     congestion_msg: Mapped[Any] = mapped_column(Text, nullable=True)
     sdot_current_count: Mapped[Any] = mapped_column(Integer, nullable=True)
     sdot_baseline_count: Mapped[Any] = mapped_column(Integer, nullable=True)
@@ -232,6 +234,8 @@ class TrendHotPlace(Base):
     rank_change: Mapped[Any] = mapped_column(SmallInteger, nullable=True, default=0)
     congestion_level: Mapped[Any] = mapped_column(String(10), nullable=True)
     congestion_score: Mapped[Any] = mapped_column(Numeric(5, 2), nullable=True)
+    citydata_score: Mapped[Any] = mapped_column(Numeric(5, 2), nullable=True)
+    sdot_score: Mapped[Any] = mapped_column(Numeric(5, 2), nullable=True)
     visitor_count: Mapped[Any] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[Any] = mapped_column(
         DateTime,

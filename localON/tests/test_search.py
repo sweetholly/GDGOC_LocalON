@@ -19,7 +19,8 @@ MOCK_SEARCH_OUT = SearchOut(
             lat=37.5446,
             lng=127.0586,
             congestion_level="약간 붐빔",
-            congestion_score=65.0,
+            citydata_score=70.0,
+            sdot_score=60.0,
         )
     ],
 )
@@ -57,7 +58,8 @@ async def test_search_result_fields(client: AsyncClient):
     assert result["name"] == "성수카페거리"
     assert result["category"] == "발달상권"
     assert result["congestion_level"] == "약간 붐빔"
-    assert result["congestion_score"] == pytest.approx(65.0)
+    assert result["citydata_score"] == pytest.approx(70.0)
+    assert result["sdot_score"] == pytest.approx(60.0)
 
 
 @pytest.mark.asyncio
@@ -106,7 +108,8 @@ async def test_search_multiple_results(client: AsyncClient):
                 lat=37.5130,
                 lng=127.0597,
                 congestion_level="보통",
-                congestion_score=50.0,
+                citydata_score=50.0,
+                sdot_score=None,
             ),
             SearchResultOut(
                 area_id=5,
@@ -116,7 +119,8 @@ async def test_search_multiple_results(client: AsyncClient):
                 lat=37.4979,
                 lng=127.0276,
                 congestion_level="붐빔",
-                congestion_score=85.0,
+                citydata_score=90.0,
+                sdot_score=80.0,
             ),
         ],
     )

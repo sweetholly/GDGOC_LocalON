@@ -11,7 +11,8 @@ class SearchResultOut(BaseModel):
     lat: float | None
     lng: float | None
     congestion_level: str | None
-    congestion_score: float | None
+    citydata_score: float | None
+    sdot_score: float | None
 
 
 class SearchOut(BaseModel):
