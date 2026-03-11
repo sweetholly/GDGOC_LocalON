@@ -43,6 +43,7 @@ class RisingOut(BaseModel):
 class TrendsOut(BaseModel):
     hot_places: list[HotPlaceOut]
     rising: list[RisingOut]
+    popular_searches: list[str]
 
 
 class MainOut(BaseModel):

@@ -24,6 +24,19 @@ from sqlalchemy.orm import Mapped, mapped_column
 from .base import Base
 
 
+class SearchQueryLog(Base):
+    __tablename__ = "search_query_log"
+    __table_args__ = (Index("idx_sql_query", "query"), Index("idx_sql_created", "created_at"))
+
+    id: Mapped[Any] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    query: Mapped[Any] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[Any] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+
 class SdotTrafficRaw(Base):
     __tablename__ = "sdot_traffic_raw"
     __table_args__ = (

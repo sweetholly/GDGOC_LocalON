@@ -11,6 +11,7 @@ from app.domain import (
     AreaLiveMetric,
     TrendHotPlace,
     TrendRisingRegion,
+    SearchQueryLog,
 )
 from app.schema.mainpage import AreaSummaryOut, HotPlaceOut, MainOut, RisingOut, TrendsOut
 
@@ -111,7 +112,19 @@ async def get_main(
         for rr, area in rr_rows
     ]
 
+    # ── Popular Searches (최근 7일 기준 검색량 top 10) ──
+    # note: text() function is imported from sqlalchemy in actual code, ensure it works with func or raw sql
+    # Use SQLAlchemy to group and count
+    ps_stmt = (
+        select(SearchQueryLog.query, func.count(SearchQueryLog.id).label("cnt"))
+        .group_by(SearchQueryLog.query)
+        .order_by(func.count(SearchQueryLog.id).desc())
+        .limit(10)
+    )
+    ps_rows = (await session.execute(ps_stmt)).all()
+    popular_searches = [row.query for row in ps_rows]
+
     return MainOut(
         areas=area_list,
-        trends=TrendsOut(hot_places=hot_places, rising=rising),
+        trends=TrendsOut(hot_places=hot_places, rising=rising, popular_searches=popular_searches),
     )

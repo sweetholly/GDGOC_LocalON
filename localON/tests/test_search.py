@@ -12,6 +12,7 @@ MOCK_SEARCH_OUT = SearchOut(
     query="성수",
     results=[
         SearchResultOut(
+            result_type="localon_area",
             area_id=68,
             area_cd="POI068",
             name="성수카페거리",
@@ -53,6 +54,7 @@ async def test_search_result_fields(client: AsyncClient):
         resp = await client.get("/search?q=성수")
 
     result = resp.json()["results"][0]
+    assert result["result_type"] == "localon_area"
     assert result["area_id"] == 68
     assert result["area_cd"] == "POI068"
     assert result["name"] == "성수카페거리"
@@ -101,6 +103,7 @@ async def test_search_multiple_results(client: AsyncClient):
         query="강남",
         results=[
             SearchResultOut(
+                result_type="localon_area",
                 area_id=1,
                 area_cd="POI001",
                 name="강남 MICE 관광특구",
@@ -112,6 +115,7 @@ async def test_search_multiple_results(client: AsyncClient):
                 sdot_score=None,
             ),
             SearchResultOut(
+                result_type="localon_area",
                 area_id=5,
                 area_cd="POI005",
                 name="강남역",

@@ -59,7 +59,6 @@ MOCK_MAIN_OUT = MainOut(
                 rank_change=2,
             )
         ],
-        rising=[
             RisingOut(
                 area_id=68,
                 name="성수카페거리",
@@ -67,6 +66,7 @@ MOCK_MAIN_OUT = MainOut(
                 change_label="급상승",
             )
         ],
+        popular_searches=["성수", "홍대", "강남"],
     ),
 )
 
@@ -147,3 +147,7 @@ async def test_main_rising(client: AsyncClient):
     assert rising["area_id"] == 68
     assert rising["change_label"] == "급상승"
     assert rising["change_pct"] == pytest.approx(22.3)
+
+    ps = resp.json()["trends"]["popular_searches"]
+    assert len(ps) == 3
+    assert ps[0] == "성수"

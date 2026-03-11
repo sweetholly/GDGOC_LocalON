@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+import asyncio
+import os
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import Area, AreaAlias, AreaLiveMetric
+from app.domain import Area, AreaAlias, AreaLiveMetric, SearchQueryLog
 from app.schema.search import SearchOut, SearchResultOut
+from app.collector.clients.kakao_local import KakaoLocalClient
 
 
 async def search_areas(session: AsyncSession, q: str) -> SearchOut:
     keyword = f"%{q}%"
+
+    # 로깅: 사용자가 검색한 키워드를 저장
+    sql_log = SearchQueryLog(query=q)
+    session.add(sql_log)
+    # 다른 트랜잭션과 묶여서 커밋되거나, 상위에서 커밋됨을 가정
 
     # alias 일치 area_id 서브쿼리
     alias_subq = (
@@ -40,21 +48,53 @@ async def search_areas(session: AsyncSession, q: str) -> SearchOut:
         )
         .order_by(priority_expr)
     )
+    
+    # 카카오 로컬 검색을 병렬로 수행할 수 있도록 태스크 준비
+    kakao_client = KakaoLocalClient(os.getenv("KAKAO_REST_API_KEY", ""))
+    
+    # 2가지 비동기 조회 작업을 동시 실행
+    # (주의: search_keyword 안에서도 session을 쓰므로, async 환경에서 같은 session을
+    # 동시 스레드로 못쓸 수 있습니다. SQLAlchemy AsyncSession은 동시 쿼리를 허용하지 않으므로
+    # 순차적으로 실행하거나 각각 다른 세션을 써야합니다. 여기선 안전하게 await으로 순차 실행합니다)
     rows = (await session.execute(stmt)).all()
+    
+    try:
+        kakao_results = await kakao_client.search_keyword(session, q)
+    except Exception as e:
+        kakao_results = []
+        print(f"Kakao search error: {e}")
 
-    results = [
-        SearchResultOut(
-            area_id=area.area_id,
-            area_cd=area.area_cd,
-            name=area.area_nm,
-            category=area.ui_category,
-            lat=float(area.lat) if area.lat is not None else None,
-            lng=float(area.lng) if area.lng is not None else None,
-            congestion_level=metric.congestion_level if metric else None,
-            citydata_score=float(metric.citydata_score) if metric and metric.citydata_score is not None else None,
-            sdot_score=float(metric.sdot_score) if metric and metric.sdot_score is not None else None,
+    results = []
+    
+    # 1. 내부 DB 결과 추가
+    for area, metric, _ in rows:
+        results.append(
+            SearchResultOut(
+                result_type="localon_area",
+                area_id=area.area_id,
+                area_cd=area.area_cd,
+                name=area.area_nm,
+                category=area.ui_category,
+                lat=float(area.lat) if area.lat is not None else None,
+                lng=float(area.lng) if area.lng is not None else None,
+                congestion_level=metric.congestion_level if metric else None,
+                citydata_score=float(metric.citydata_score) if metric and metric.citydata_score is not None else None,
+                sdot_score=float(metric.sdot_score) if metric and metric.sdot_score is not None else None,
+            )
         )
-        for area, metric, _ in rows
-    ]
+
+    # 2. 외부 Kakao 결과 추가
+    for doc in kakao_results:
+        results.append(
+            SearchResultOut(
+                result_type="external_place",
+                area_id=doc.get("id"),
+                name=doc.get("place_name"),
+                address=doc.get("road_address_name") or doc.get("address_name"),
+                category="외부장소",
+                lat=float(doc.get("y")) if doc.get("y") else None,
+                lng=float(doc.get("x")) if doc.get("x") else None,
+            )
+        )
 
     return SearchOut(query=q, results=results)
