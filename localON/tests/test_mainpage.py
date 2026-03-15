@@ -1,4 +1,4 @@
-"""GET /main 엔드포인트 테스트."""
+"""GET /main contract tests."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -12,17 +12,17 @@ from app.schema.mainpage import AreaSummaryOut, HotPlaceOut, MainOut, RisingOut,
 AREA_1 = AreaSummaryOut(
     area_id=1,
     area_cd="POI001",
-    name="강남 MICE 관광특구",
-    category="관광특구",
+    name="Gangnam MICE Tourism Zone",
+    category="tourism_zone",
     lat=37.5130,
     lng=127.0597,
-    congestion_level="보통",
+    congestion_level="normal",
     citydata_score=50.0,
     sdot_score=61.25,
     population_min=32000,
     population_max=35000,
     weather_temp=12.5,
-    air_idx="보통",
+    air_idx="normal",
     distance_m=None,
     updated_at=datetime(2026, 3, 8, 14, 30, 0),
 )
@@ -30,17 +30,17 @@ AREA_1 = AreaSummaryOut(
 AREA_2 = AreaSummaryOut(
     area_id=2,
     area_cd="POI002",
-    name="광화문·덕수궁",
-    category="역사공간",
+    name="Gwanghwamun Square",
+    category="public_space",
     lat=37.5701,
     lng=126.9769,
-    congestion_level="여유",
+    congestion_level="free",
     citydata_score=25.0,
     sdot_score=None,
     population_min=5000,
     population_max=8000,
     weather_temp=11.0,
-    air_idx="좋음",
+    air_idx="good",
     distance_m=None,
     updated_at=datetime(2026, 3, 8, 14, 30, 0),
 )
@@ -52,21 +52,22 @@ MOCK_MAIN_OUT = MainOut(
             HotPlaceOut(
                 rank=1,
                 area_id=1,
-                name="강남 MICE 관광특구",
-                congestion_level="붐빔",
+                name="Gangnam MICE Tourism Zone",
+                congestion_level="crowded",
                 citydata_score=90.0,
                 sdot_score=87.0,
                 rank_change=2,
             )
         ],
+        rising=[
             RisingOut(
                 area_id=68,
-                name="성수카페거리",
+                name="Seongsu Cafe Street",
                 change_pct=22.3,
-                change_label="급상승",
+                change_label="rising",
             )
         ],
-        popular_searches=["성수", "홍대", "강남"],
+        popular_searches=["seongsu", "hongdae", "gangnam"],
     ),
 )
 
@@ -89,6 +90,7 @@ async def test_main_response_structure(client: AsyncClient):
     assert "trends" in body
     assert "hot_places" in body["trends"]
     assert "rising" in body["trends"]
+    assert "popular_searches" in body["trends"]
 
 
 @pytest.mark.asyncio
@@ -99,8 +101,8 @@ async def test_main_area_fields(client: AsyncClient):
     area = resp.json()["areas"][0]
     assert area["area_id"] == 1
     assert area["area_cd"] == "POI001"
-    assert area["name"] == "강남 MICE 관광특구"
-    assert area["congestion_level"] == "보통"
+    assert area["name"] == "Gangnam MICE Tourism Zone"
+    assert area["congestion_level"] == "normal"
     assert area["citydata_score"] == 50.0
     assert area["sdot_score"] == 61.25
 
@@ -139,15 +141,15 @@ async def test_main_hot_places(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_main_rising(client: AsyncClient):
+async def test_main_rising_and_popular_searches(client: AsyncClient):
     with patch("app.router.mainpage.get_main", new=AsyncMock(return_value=MOCK_MAIN_OUT)):
         resp = await client.get("/main")
 
     rising = resp.json()["trends"]["rising"][0]
     assert rising["area_id"] == 68
-    assert rising["change_label"] == "급상승"
+    assert rising["change_label"] == "rising"
     assert rising["change_pct"] == pytest.approx(22.3)
 
     ps = resp.json()["trends"]["popular_searches"]
     assert len(ps) == 3
-    assert ps[0] == "성수"
+    assert ps[0] == "seongsu"

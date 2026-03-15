@@ -1,855 +1,1167 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: LOCAL ON API
+  description: Real-time Seoul citydata based congestion information API
   version: 1.0.0
-  description: |
-    LOCAL ON API는 서울 주요 지역의 실시간 혼잡/수요/날씨/트렌드 정보를 제공합니다.
-    프론트엔드 조회 시나리오에 맞춰 메인, 지역상세, 검색 중심으로 구성된 Read API입니다.
-
-    엔드포인트 개요:
-    - GET /main: 메인 화면용 지역 요약 + 트렌드 블록
-    - GET /areas/{area_id}: 지역 상세 화면용 종합 데이터
-    - GET /search: 키워드 기반 지역 검색
-
-    검증/오류 규칙:
-    - 경로/쿼리 파라미터 검증 실패: HTTP 422
-    - 리소스 미존재: HTTP 404
-servers:
-  - url: http://localhost:8000
-tags:
-  - name: main
-    description: 메인 화면에 필요한 집계 데이터 API
-  - name: areas
-    description: 특정 지역 상세 데이터 API
-  - name: search
-    description: 키워드 기반 지역 검색 API
 paths:
   /main:
     get:
-      tags: [main]
-      summary: 메인 화면 데이터 조회
-      description: |
-        메인 화면에 필요한 지역 요약 목록과 트렌드 정보를 반환합니다.
-        `lat`, `lng`를 함께 전달하면 거리 기반 정렬(가능한 항목에 한함)이 적용됩니다.
-        위치 정보가 없으면 서버 기본 정렬 기준으로 반환됩니다. (활성된 120개 지역 반환)
+      tags:
+      - main
+      summary: Main Endpoint
+      operationId: main_endpoint_main_get
       parameters:
-        - in: query
-          name: lat
-          required: false
-          schema:
-            type: number
-            format: float
-          description: 사용자 위도(WGS84)
-          example: 37.4979
-        - in: query
-          name: lng
-          required: false
-          schema:
-            type: number
-            format: float
-          description: 사용자 경도(WGS84)
-          example: 127.0276
+      - name: lat
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: number
+          - type: 'null'
+          description: User latitude
+          title: Lat
+        description: User latitude
+      - name: lng
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: number
+          - type: 'null'
+          description: User longitude
+          title: Lng
+        description: User longitude
       responses:
-        "200":
-          description: 메인 화면 응답
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/MainOut"
-              example:
-                areas:
-                  - area_id: 1
-                    area_cd: POI001
-                    name: 강남 MICE 관광특구
-                    category: 관광특구
-                    lat: 37.513
-                    lng: 127.0597
-                    congestion_level: 보통
-                    congestion_score: 50.0
-                    population_min: 32000
-                    population_max: 35000
-                    weather_temp: 12.5
-                    air_idx: 보통
-                    distance_m: 1200
-                    updated_at: "2026-03-08T14:30:00"
-                trends:
-                  hot_places:
-                    - rank: 1
-                      area_id: 3
-                      name: 명동 관광특구
-                      congestion_level: 붐빔
-                      congestion_score: 88.5
-                      rank_change: 2
-                  rising:
-                    - area_id: 68
-                      name: 성수카페거리
-                      change_pct: 22.3
-                      change_label: 급상승
-        "422":
-          description: 검증 오류(쿼리 타입/형식 오류)
+                $ref: '#/components/schemas/MainOut'
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorOut"
-              example:
-                error: BAD_REQUEST
-                message: "lat 값 형식이 올바르지 않습니다"
-        "500":
-          description: 서버 내부 오류
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorOut"
-              example:
-                error: INTERNAL_ERROR
-                message: 서버 내부 오류가 발생했습니다
-
+                $ref: '#/components/schemas/HTTPValidationError'
   /areas/{area_id}:
     get:
-      tags: [areas]
-      summary: 지역 상세 조회
-      description: |
-        단일 지역의 상세 정보를 반환합니다.
-        혼잡도, 시간대 그래프, 추천 방문시간, 수요, 상권, 날씨가 포함됩니다.
-        `date`를 지정하면 해당 일자의 시간대 데이터를 조회합니다.
+      tags:
+      - areas
+      summary: Area Detail Endpoint
+      operationId: area_detail_endpoint_areas__area_id__get
       parameters:
-        - in: path
-          name: area_id
-          required: true
-          schema:
-            type: integer
-            minimum: 1
-          description: 지역 ID(1 이상의 정수)
-          example: 1
-        - in: query
-          name: date
-          required: false
-          schema:
-            type: string
+      - name: area_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          exclusiveMinimum: 0
+          description: Area ID
+          title: Area Id
+        description: Area ID
+      - name: date
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
             format: date
-          description: 시간대 데이터 조회 기준일(YYYY-MM-DD)
-          example: "2026-03-08"
+          - type: 'null'
+          description: 'Date for hourly timeseries (default: today)'
+          title: Date
+        description: 'Date for hourly timeseries (default: today)'
       responses:
-        "200":
-          description: 지역 상세 응답
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AreaDetailOut"
-              example:
-                area_id: 1
-                area_cd: POI001
-                name: 강남 MICE 관광특구
-                eng_name: Gangnam MICE Special Tourist Zone
-                category: 관광특구
-                lat: 37.513
-                lng: 127.0597
-                congestion:
-                  level: 보통
-                  score: 50.0
-                  msg: 원활한 흐름입니다
-                  population_min: 32000
-                  population_max: 35000
-                  sdot_current: 245
-                  sdot_baseline: 200
-                  is_estimated: false
-                  updated_at: "2026-03-08T14:30:00"
-                hourly:
-                  - hour: 14
-                    actual: 9100
-                    baseline: 8600
-                    level: 보통
-                recommendations:
-                  - time_range: "10:00~11:00"
-                    expected_level: 여유
-                    avg_population: 18000
-                demand:
-                  type: 관광 방문 수요 중심
-                  resident_rate: 35.2
-                  non_resident_rate: 64.8
-                  demographics:
-                    male_rate: 48.5
-                    female_rate: 51.5
-                    age_0: 2.1
-                    age_10: 8.3
-                    age_20: 28.3
-                    age_30: 25.1
-                    age_40: 18.5
-                    age_50: 10.2
-                    age_60: 5.4
-                    age_70: 2.1
-                commercial:
-                  level: 보통
-                  payment_cnt: 1523
-                  payment_amt_min: 45000000
-                  payment_amt_max: 52000000
-                weather:
-                  temp: 12.5
-                  sensible_temp: 10.2
-                  humidity: 45
-                  wind_spd: 3.2
-                  pm25: 15.0
-                  pm25_index: 좋음
-                  pm10: 28.0
-                  pm10_index: 보통
-        "422":
-          description: 검증 오류(경로/쿼리 형식 오류)
+                $ref: '#/components/schemas/AreaDetailOut'
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorOut"
-              example:
-                error: BAD_REQUEST
-                message: "area_id는 1 이상의 정수여야 합니다"
-        "404":
-          description: 대상 지역 없음
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorOut"
-              example:
-                error: NOT_FOUND
-                message: 해당 지역을 찾을 수 없습니다
-        "500":
-          description: 서버 내부 오류
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorOut"
-              example:
-                error: INTERNAL_ERROR
-                message: 서버 내부 오류가 발생했습니다
-
+                $ref: '#/components/schemas/HTTPValidationError'
   /search:
     get:
-      tags: [search]
-      summary: 지역 검색
-      description: |
-        키워드로 활성 지역을 검색합니다.
-        결과 정렬/우선순위는 서버 검색 로직(완전일치/별칭/부분일치)에 따릅니다.
+      tags:
+      - search
+      summary: Search Endpoint
+      operationId: search_endpoint_search_get
       parameters:
-        - in: query
-          name: q
-          required: true
-          schema:
-            type: string
-            minLength: 1
-          description: 검색 키워드(빈 문자열 불가)
-          example: 홍대
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          description: Search keyword
+          title: Q
+        description: Search keyword
       responses:
-        "200":
-          description: 검색 결과 응답
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SearchOut"
-              example:
-                query: 홍대
-                results:
-                  - area_id: 7
-                    area_cd: POI007
-                    name: 홍대 관광특구
-                    category: 관광특구
-                    lat: 37.5563
-                    lng: 126.922
-                    congestion_level: 약간 붐빔
-                    congestion_score: 65.0
-        "422":
-          description: 검증 오류(누락/빈값/형식 오류)
+                $ref: '#/components/schemas/SearchOut'
+        '422':
+          description: Validation Error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorOut"
-              example:
-                error: BAD_REQUEST
-                message: "q 파라미터는 필수입니다"
-        "500":
-          description: 서버 내부 오류
+                $ref: '#/components/schemas/HTTPValidationError'
+  /areas/{area_id}/visit-insights:
+    get:
+      tags:
+      - insights
+      summary: Area Visit Insights Endpoint
+      operationId: area_visit_insights_endpoint_areas__area_id__visit_insights_get
+      parameters:
+      - name: area_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          exclusiveMinimum: 0
+          description: Area ID
+          title: Area Id
+        description: Area ID
+      - name: lookback_days
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 90
+          minimum: 7
+          description: Historical lookback window
+          default: 28
+          title: Lookback Days
+        description: Historical lookback window
+      responses:
+        '200':
+          description: Successful Response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorOut"
-              example:
-                error: INTERNAL_ERROR
-                message: 서버 내부 오류가 발생했습니다
-
+                $ref: '#/components/schemas/VisitInsightOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /reviews/reliability:
+    post:
+      tags:
+      - insights
+      summary: Review Reliability Endpoint
+      operationId: review_reliability_endpoint_reviews_reliability_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewReliabilityIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewReliabilityOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
 components:
   schemas:
-    ErrorOut:
-      type: object
-      description: API 오류 응답 공통 포맷
-      required: [error, message]
-      properties:
-        error:
-          type: string
-          description: 오류 코드
-        message:
-          type: string
-          description: 사람이 읽을 수 있는 오류 메시지
-      example:
-        error: BAD_REQUEST
-        message: 요청 파라미터가 올바르지 않습니다
-
-    AreaSummaryOut:
-      type: object
-      description: "`/main`의 지역 목록에 사용되는 지역 요약 정보"
-      required:
-        [
-          area_id,
-          area_cd,
-          name,
-          category,
-          lat,
-          lng,
-          congestion_level,
-          congestion_score,
-          population_min,
-          population_max,
-          weather_temp,
-          air_idx,
-          distance_m,
-          updated_at,
-        ]
+    AreaDetailOut:
       properties:
         area_id:
           type: integer
-          description: 내부 지역 식별자
+          title: Area Id
         area_cd:
           type: string
-          description: "지역 코드(예: POI001)"
+          title: Area Cd
         name:
           type: string
-          description: 지역명
+          title: Name
+        eng_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Eng Name
         category:
-          type: string
-          nullable: true
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
         lat:
-          type: number
-          format: float
-          nullable: true
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lat
         lng:
-          type: number
-          format: float
-          nullable: true
-        congestion_level:
-          type: string
-          nullable: true
-          description: 혼잡도 레벨(문자형)
-        congestion_score:
-          type: number
-          format: float
-          nullable: true
-          description: 혼잡도 점수(수치형)
-        population_min:
-          type: integer
-          nullable: true
-        population_max:
-          type: integer
-          nullable: true
-        weather_temp:
-          type: number
-          format: float
-          nullable: true
-        air_idx:
-          type: string
-          nullable: true
-        distance_m:
-          type: integer
-          nullable: true
-          description: 사용자 위치 기준 거리(m), 위치 미입력 시 null
-        updated_at:
-          type: string
-          format: date-time
-          nullable: true
-          description: 최신 지표 갱신 시각
-
-    HotPlaceOut:
-      type: object
-      description: 인기 지역 트렌드 순위 항목
-      required: [rank, area_id, name, congestion_level, congestion_score, rank_change]
-      properties:
-        rank:
-          type: integer
-        area_id:
-          type: integer
-        name:
-          type: string
-        congestion_level:
-          type: string
-          nullable: true
-        congestion_score:
-          type: number
-          format: float
-          nullable: true
-        rank_change:
-          type: integer
-          nullable: true
-
-    RisingOut:
-      type: object
-      description: 상승 지역 트렌드 항목
-      required: [area_id, name, change_pct, change_label]
-      properties:
-        area_id:
-          type: integer
-          nullable: true
-        name:
-          type: string
-          nullable: true
-        change_pct:
-          type: number
-          format: float
-          nullable: true
-        change_label:
-          type: string
-          nullable: true
-
-    TrendsOut:
-      type: object
-      description: 메인 응답의 트렌드 블록
-      required: [hot_places, rising]
-      properties:
-        hot_places:
-          type: array
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lng
+        congestion:
+          $ref: '#/components/schemas/CongestionOut'
+        hourly:
           items:
-            $ref: "#/components/schemas/HotPlaceOut"
-        rising:
+            $ref: '#/components/schemas/HourlyOut'
           type: array
+          title: Hourly
+        recommendations:
           items:
-            $ref: "#/components/schemas/RisingOut"
-
-    MainOut:
-      type: object
-      description: "`/main` 최상위 응답 객체"
-      required: [areas, trends]
-      properties:
-        areas:
+            $ref: '#/components/schemas/RecommendationOut'
           type: array
-          items:
-            $ref: "#/components/schemas/AreaSummaryOut"
-        trends:
-          $ref: "#/components/schemas/TrendsOut"
-      example:
-        areas:
-          - area_id: 1
-            area_cd: POI001
-            name: 강남 MICE 관광특구
-            category: 관광특구
-            lat: 37.513
-            lng: 127.0597
-            congestion_level: 보통
-            congestion_score: 50.0
-            population_min: 32000
-            population_max: 35000
-            weather_temp: 12.5
-            air_idx: 보통
-            distance_m: 1200
-            updated_at: "2026-03-08T14:30:00"
-        trends:
-          hot_places:
-            - rank: 1
-              area_id: 3
-              name: 명동 관광특구
-              congestion_level: 붐빔
-              congestion_score: 88.5
-              rank_change: 2
-          rising:
-            - area_id: 68
-              name: 성수카페거리
-              change_pct: 22.3
-              change_label: 급상승
-
-    CongestionOut:
+          title: Recommendations
+        demand:
+          $ref: '#/components/schemas/DemandOut'
+        commercial:
+          $ref: '#/components/schemas/CommercialOut'
+        weather:
+          $ref: '#/components/schemas/WeatherOut'
       type: object
-      description: 단일 지역의 현재 혼잡도 스냅샷
       required:
-        [
-          level,
-          score,
-          msg,
-          population_min,
-          population_max,
-          sdot_current,
-          sdot_baseline,
-          is_estimated,
-          updated_at,
-        ]
+      - area_id
+      - area_cd
+      - name
+      - eng_name
+      - category
+      - lat
+      - lng
+      - congestion
+      - hourly
+      - recommendations
+      - demand
+      - commercial
+      - weather
+      title: AreaDetailOut
+    AreaSummaryOut:
+      properties:
+        area_id:
+          type: integer
+          title: Area Id
+        area_cd:
+          type: string
+          title: Area Cd
+        name:
+          type: string
+          title: Name
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        lat:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lat
+        lng:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lng
+        congestion_level:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Congestion Level
+        citydata_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Citydata Score
+        sdot_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Sdot Score
+        population_min:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Population Min
+        population_max:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Population Max
+        weather_temp:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Weather Temp
+        air_idx:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Air Idx
+        distance_m:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Distance M
+        updated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Updated At
+      type: object
+      required:
+      - area_id
+      - area_cd
+      - name
+      - category
+      - lat
+      - lng
+      - congestion_level
+      - citydata_score
+      - sdot_score
+      - population_min
+      - population_max
+      - weather_temp
+      - air_idx
+      - updated_at
+      title: AreaSummaryOut
+    CommercialOut:
       properties:
         level:
-          type: string
-          nullable: true
-          description: 서울시 citydata API에서 제공하는 혼잡도 단계
-        score:
-          type: number
-          format: float
-          nullable: true
-          description: >
-            0~100 범위의 계산 점수입니다. citydata 혼잡도 점수와 S-DoT 비율 점수를 함께 반영합니다.
-            두 값이 모두 있으면 score = (level_score + sensor_score) / 2 로 계산합니다.
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Level
+        payment_cnt:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Payment Cnt
+        payment_amt_min:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Payment Amt Min
+        payment_amt_max:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Payment Amt Max
+      type: object
+      required:
+      - level
+      - payment_cnt
+      - payment_amt_min
+      - payment_amt_max
+      title: CommercialOut
+    CongestionOut:
+      properties:
+        level:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Level
+        citydata_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Citydata Score
+        sdot_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Sdot Score
         msg:
-          type: string
-          nullable: true
-          description: citydata API에서 제공하는 혼잡 안내 문구
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Msg
         population_min:
-          type: integer
-          nullable: true
-          description: 해당 지역 citydata 실시간 인구 범위의 하한값
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Population Min
         population_max:
-          type: integer
-          nullable: true
-          description: 해당 지역 citydata 실시간 인구 범위의 상한값
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Population Max
         sdot_current:
-          type: integer
-          nullable: true
-          description: 해당 지역에 매핑된 S-DoT 최신 방문자 수
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Sdot Current
         sdot_baseline:
-          type: integer
-          nullable: true
-          description: 최근 14일 S-DoT 방문자 수 평균(반올림)
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Sdot Baseline
         is_estimated:
           type: boolean
-          description: 최신 소스값이 부족해 대체값/추정값을 사용한 경우 true
+          title: Is Estimated
         updated_at:
-          type: string
-          format: date-time
-          nullable: true
-          description: 혼잡도 스냅샷 갱신 시각
-
-    HourlyOut:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Updated At
       type: object
-      description: 선택한 날짜의 시간대별 지표
-      required: [hour, actual, baseline, level]
-      properties:
-        hour:
-          type: integer
-        actual:
-          type: integer
-          nullable: true
-        baseline:
-          type: integer
-          nullable: true
-        level:
-          type: string
-          nullable: true
-        actual_avg:
-          type: number
-          format: float
-          nullable: true
-          description: 해당 시간대에 수집된 actual 값의 평균
-        actual_min:
-          type: integer
-          nullable: true
-          description: 해당 시간대에 수집된 actual 값의 최솟값
-        actual_max:
-          type: integer
-          nullable: true
-          description: 해당 시간대에 수집된 actual 값의 최댓값
-
-    RecommendationOut:
-      type: object
-      description: 추천 방문 시간대 항목
-      required: [time_range, expected_level, avg_population]
-      properties:
-        time_range:
-          type: string
-        expected_level:
-          type: string
-        avg_population:
-          type: integer
-
-    DemographicsOut:
-      type: object
-      description: 성별/연령대 인구 구성 비율
       required:
-        [
-          male_rate,
-          female_rate,
-          age_0,
-          age_10,
-          age_20,
-          age_30,
-          age_40,
-          age_50,
-          age_60,
-          age_70,
-        ]
-      properties:
-        male_rate:
-          type: number
-          format: float
-          nullable: true
-        female_rate:
-          type: number
-          format: float
-          nullable: true
-        age_0:
-          type: number
-          format: float
-          nullable: true
-        age_10:
-          type: number
-          format: float
-          nullable: true
-        age_20:
-          type: number
-          format: float
-          nullable: true
-        age_30:
-          type: number
-          format: float
-          nullable: true
-        age_40:
-          type: number
-          format: float
-          nullable: true
-        age_50:
-          type: number
-          format: float
-          nullable: true
-        age_60:
-          type: number
-          format: float
-          nullable: true
-        age_70:
-          type: number
-          format: float
-          nullable: true
-
+      - level
+      - citydata_score
+      - sdot_score
+      - msg
+      - population_min
+      - population_max
+      - sdot_current
+      - sdot_baseline
+      - is_estimated
+      - updated_at
+      title: CongestionOut
     DemandOut:
-      type: object
-      description: 인구 지표 기반 수요 해석 블록
-      required: [type, resident_rate, non_resident_rate, demographics]
       properties:
         type:
           type: string
+          title: Type
         resident_rate:
-          type: number
-          format: float
-          nullable: true
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Resident Rate
         non_resident_rate:
-          type: number
-          format: float
-          nullable: true
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Non Resident Rate
         demographics:
-          $ref: "#/components/schemas/DemographicsOut"
-
-    CommercialOut:
+          $ref: '#/components/schemas/DemographicsOut'
       type: object
-      description: 지역 상권 요약 정보
-      required: [level, payment_cnt, payment_amt_min, payment_amt_max]
-      properties:
-        level:
-          type: string
-          nullable: true
-        payment_cnt:
-          type: integer
-          nullable: true
-        payment_amt_min:
-          type: integer
-          nullable: true
-        payment_amt_max:
-          type: integer
-          nullable: true
-
-    WeatherOut:
-      type: object
-      description: 지역 날씨/대기질 요약 정보
       required:
-        [temp, sensible_temp, humidity, wind_spd, pm25, pm25_index, pm10, pm10_index]
+      - type
+      - resident_rate
+      - non_resident_rate
+      - demographics
+      title: DemandOut
+    DemographicsOut:
       properties:
-        temp:
-          type: number
-          format: float
-          nullable: true
-        sensible_temp:
-          type: number
-          format: float
-          nullable: true
-        humidity:
-          type: integer
-          nullable: true
-        wind_spd:
-          type: number
-          format: float
-          nullable: true
-        pm25:
-          type: number
-          format: float
-          nullable: true
-        pm25_index:
-          type: string
-          nullable: true
-        pm10:
-          type: number
-          format: float
-          nullable: true
-        pm10_index:
-          type: string
-          nullable: true
-
-    AreaDetailOut:
+        male_rate:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Male Rate
+        female_rate:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Female Rate
+        age_0:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Age 0
+        age_10:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Age 10
+        age_20:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Age 20
+        age_30:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Age 30
+        age_40:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Age 40
+        age_50:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Age 50
+        age_60:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Age 60
+        age_70:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Age 70
       type: object
-      description: "`/areas/{area_id}` 최상위 응답 객체"
       required:
-        [
-          area_id,
-          area_cd,
-          name,
-          eng_name,
-          category,
-          lat,
-          lng,
-          congestion,
-          hourly,
-          recommendations,
-          demand,
-          commercial,
-          weather,
-        ]
+      - male_rate
+      - female_rate
+      - age_0
+      - age_10
+      - age_20
+      - age_30
+      - age_40
+      - age_50
+      - age_60
+      - age_70
+      title: DemographicsOut
+    EventSignalOut:
       properties:
-        area_id:
-          type: integer
-        area_cd:
-          type: string
         name:
           type: string
-        eng_name:
-          type: string
-          nullable: true
-        category:
-          type: string
-          nullable: true
-        lat:
-          type: number
-          format: float
-          nullable: true
-        lng:
-          type: number
-          format: float
-          nullable: true
-        congestion:
-          $ref: "#/components/schemas/CongestionOut"
-        hourly:
-          type: array
-          items:
-            $ref: "#/components/schemas/HourlyOut"
-        recommendations:
-          type: array
-          items:
-            $ref: "#/components/schemas/RecommendationOut"
-        demand:
-          $ref: "#/components/schemas/DemandOut"
-        commercial:
-          $ref: "#/components/schemas/CommercialOut"
-        weather:
-          $ref: "#/components/schemas/WeatherOut"
-      example:
-        area_id: 1
-        area_cd: POI001
-        name: 강남 MICE 관광특구
-        eng_name: Gangnam MICE Special Tourist Zone
-        category: 관광특구
-        lat: 37.513
-        lng: 127.0597
-        congestion:
-          level: 보통
-          score: 50.0
-          msg: 원활한 흐름입니다
-          population_min: 32000
-          population_max: 35000
-          sdot_current: 245
-          sdot_baseline: 200
-          is_estimated: false
-          updated_at: "2026-03-08T14:30:00"
-        hourly:
-          - hour: 14
-            actual: 9100
-            baseline: 8600
-            level: 보통
-        recommendations:
-          - time_range: "10:00~11:00"
-            expected_level: 여유
-            avg_population: 18000
-        demand:
-          type: 관광 방문 수요 중심
-          resident_rate: 35.2
-          non_resident_rate: 64.8
-          demographics:
-            male_rate: 48.5
-            female_rate: 51.5
-            age_0: 2.1
-            age_10: 8.3
-            age_20: 28.3
-            age_30: 25.1
-            age_40: 18.5
-            age_50: 10.2
-            age_60: 5.4
-            age_70: 2.1
-        commercial:
-          level: 보통
-          payment_cnt: 1523
-          payment_amt_min: 45000000
-          payment_amt_max: 52000000
-        weather:
-          temp: 12.5
-          sensible_temp: 10.2
-          humidity: 45
-          wind_spd: 3.2
-          pm25: 15.0
-          pm25_index: 좋음
-          pm10: 28.0
-          pm10_index: 보통
-
-    SearchResultOut:
+          title: Name
+        mention_count:
+          type: integer
+          title: Mention Count
+        period:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Period
+        place:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Place
       type: object
-      description: 검색 결과 단일 항목
       required:
-        [area_id, area_cd, name, category, lat, lng, congestion_level, congestion_score]
+      - name
+      - mention_count
+      - period
+      - place
+      title: EventSignalOut
+    HTTPValidationError:
       properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HotPlaceOut:
+      properties:
+        rank:
+          type: integer
+          title: Rank
         area_id:
           type: integer
-        area_cd:
-          type: string
+          title: Area Id
         name:
           type: string
-        category:
-          type: string
-          nullable: true
-        lat:
-          type: number
-          format: float
-          nullable: true
-        lng:
-          type: number
-          format: float
-          nullable: true
+          title: Name
         congestion_level:
-          type: string
-          nullable: true
-        congestion_score:
-          type: number
-          format: float
-          nullable: true
-
-    SearchOut:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Congestion Level
+        citydata_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Citydata Score
+        sdot_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Sdot Score
+        rank_change:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Rank Change
       type: object
-      description: "`/search` 최상위 응답 객체"
-      required: [query, results]
+      required:
+      - rank
+      - area_id
+      - name
+      - congestion_level
+      - citydata_score
+      - sdot_score
+      - rank_change
+      title: HotPlaceOut
+    HourlyOut:
+      properties:
+        hour:
+          type: integer
+          title: Hour
+        actual:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Actual
+        baseline:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Baseline
+        level:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Level
+        actual_avg:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Actual Avg
+        actual_min:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Actual Min
+        actual_max:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Actual Max
+      type: object
+      required:
+      - hour
+      - actual
+      - baseline
+      - level
+      title: HourlyOut
+    MainOut:
+      properties:
+        areas:
+          items:
+            $ref: '#/components/schemas/AreaSummaryOut'
+          type: array
+          title: Areas
+        trends:
+          $ref: '#/components/schemas/TrendsOut'
+      type: object
+      required:
+      - areas
+      - trends
+      title: MainOut
+    PopulationForecastOut:
+      properties:
+        at:
+          type: string
+          format: date-time
+          title: At
+        expected_population:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Expected Population
+        confidence:
+          type: number
+          title: Confidence
+        cause_factors:
+          items:
+            type: string
+          type: array
+          title: Cause Factors
+      type: object
+      required:
+      - at
+      - expected_population
+      - confidence
+      - cause_factors
+      title: PopulationForecastOut
+    RecommendationOut:
+      properties:
+        time_range:
+          type: string
+          title: Time Range
+        expected_level:
+          type: string
+          title: Expected Level
+        avg_population:
+          type: integer
+          title: Avg Population
+      type: object
+      required:
+      - time_range
+      - expected_level
+      - avg_population
+      title: RecommendationOut
+    ReviewItemIn:
+      properties:
+        text:
+          type: string
+          maxLength: 3000
+          minLength: 1
+          title: Text
+        rating:
+          anyOf:
+          - type: number
+            maximum: 5.0
+            minimum: 0.0
+          - type: 'null'
+          title: Rating
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        source:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source
+      type: object
+      required:
+      - text
+      title: ReviewItemIn
+    ReviewReliabilityIn:
+      properties:
+        place_name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Place Name
+        place_id:
+          anyOf:
+          - type: string
+            maxLength: 60
+          - type: 'null'
+          title: Place Id
+        area_id:
+          anyOf:
+          - type: integer
+            exclusiveMinimum: 0.0
+          - type: 'null'
+          title: Area Id
+        source:
+          anyOf:
+          - type: string
+            maxLength: 30
+          - type: 'null'
+          title: Source
+        reviews:
+          items:
+            $ref: '#/components/schemas/ReviewItemIn'
+          type: array
+          title: Reviews
+      type: object
+      required:
+      - place_name
+      title: ReviewReliabilityIn
+    ReviewReliabilityOut:
+      properties:
+        place_key:
+          type: string
+          title: Place Key
+        place_name:
+          type: string
+          title: Place Name
+        total_reviews:
+          type: integer
+          title: Total Reviews
+        ad_suspect_ratio:
+          type: number
+          title: Ad Suspect Ratio
+        ai_suspect_ratio:
+          type: number
+          title: Ai Suspect Ratio
+        duplicate_ratio:
+          type: number
+          title: Duplicate Ratio
+        trust_score:
+          type: number
+          title: Trust Score
+        grade:
+          type: string
+          title: Grade
+        suspicious_reviews:
+          items:
+            $ref: '#/components/schemas/SuspiciousReviewOut'
+          type: array
+          title: Suspicious Reviews
+        analyzed_at:
+          type: string
+          format: date-time
+          title: Analyzed At
+        model_version:
+          type: string
+          title: Model Version
+      type: object
+      required:
+      - place_key
+      - place_name
+      - total_reviews
+      - ad_suspect_ratio
+      - ai_suspect_ratio
+      - duplicate_ratio
+      - trust_score
+      - grade
+      - suspicious_reviews
+      - analyzed_at
+      - model_version
+      title: ReviewReliabilityOut
+    RisingOut:
+      properties:
+        area_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Area Id
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        change_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Change Pct
+        change_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Change Label
+      type: object
+      required:
+      - area_id
+      - name
+      - change_pct
+      - change_label
+      title: RisingOut
+    SearchOut:
       properties:
         query:
           type: string
+          title: Query
         results:
-          type: array
           items:
-            $ref: "#/components/schemas/SearchResultOut"
-      example:
-        query: 홍대
-        results:
-          - area_id: 7
-            area_cd: POI007
-            name: 홍대 관광특구
-            category: 관광특구
-            lat: 37.5563
-            lng: 126.922
-            congestion_level: 약간 붐빔
-            congestion_score: 65.0
+            $ref: '#/components/schemas/SearchResultOut'
+          type: array
+          title: Results
+      type: object
+      required:
+      - query
+      - results
+      title: SearchOut
+    SearchResultOut:
+      properties:
+        result_type:
+          type: string
+          enum:
+          - localon_area
+          - external_place
+          title: Result Type
+          default: localon_area
+        area_id:
+          anyOf:
+          - type: string
+          - type: integer
+          title: Area Id
+        area_cd:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Area Cd
+        name:
+          type: string
+          title: Name
+        address:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Address
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        lat:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lat
+        lng:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Lng
+        congestion_level:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Congestion Level
+        citydata_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Citydata Score
+        sdot_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Sdot Score
+        review_trust_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Review Trust Score
+        review_trust_grade:
+          anyOf:
+          - type: string
+            enum:
+            - high
+            - medium
+            - low
+            - unknown
+          - type: 'null'
+          title: Review Trust Grade
+        review_total_reviews:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Review Total Reviews
+        review_model_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Review Model Version
+        review_analyzed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Review Analyzed At
+        review_data_status:
+          anyOf:
+          - type: string
+            enum:
+            - analyzed
+            - insufficient_data
+          - type: 'null'
+          title: Review Data Status
+      type: object
+      required:
+      - area_id
+      - name
+      - category
+      - lat
+      - lng
+      title: SearchResultOut
+    SuspiciousReviewOut:
+      properties:
+        reason:
+          type: string
+          title: Reason
+        preview:
+          type: string
+          title: Preview
+      type: object
+      required:
+      - reason
+      - preview
+      title: SuspiciousReviewOut
+    TrendsOut:
+      properties:
+        hot_places:
+          items:
+            $ref: '#/components/schemas/HotPlaceOut'
+          type: array
+          title: Hot Places
+        rising:
+          items:
+            $ref: '#/components/schemas/RisingOut'
+          type: array
+          title: Rising
+        popular_searches:
+          items:
+            type: string
+          type: array
+          title: Popular Searches
+      type: object
+      required:
+      - hot_places
+      - rising
+      - popular_searches
+      title: TrendsOut
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    VisitInsightOut:
+      properties:
+        area_id:
+          type: integer
+          title: Area Id
+        area_name:
+          type: string
+          title: Area Name
+        lookback_days:
+          type: integer
+          title: Lookback Days
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+        hottest_slots:
+          items:
+            $ref: '#/components/schemas/VisitTimeSlotOut'
+          type: array
+          title: Hottest Slots
+        recommended_slots:
+          items:
+            $ref: '#/components/schemas/VisitTimeSlotOut'
+          type: array
+          title: Recommended Slots
+        next_hours_forecast:
+          items:
+            $ref: '#/components/schemas/PopulationForecastOut'
+          type: array
+          title: Next Hours Forecast
+        event_signals:
+          items:
+            $ref: '#/components/schemas/EventSignalOut'
+          type: array
+          title: Event Signals
+      type: object
+      required:
+      - area_id
+      - area_name
+      - lookback_days
+      - generated_at
+      - hottest_slots
+      - recommended_slots
+      - next_hours_forecast
+      - event_signals
+      title: VisitInsightOut
+    VisitTimeSlotOut:
+      properties:
+        day_of_week:
+          type: integer
+          title: Day Of Week
+        day_label:
+          type: string
+          title: Day Label
+        hour:
+          type: integer
+          title: Hour
+        time_range:
+          type: string
+          title: Time Range
+        avg_population:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Avg Population
+        congestion_ratio:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Congestion Ratio
+        hot_score:
+          type: number
+          title: Hot Score
+        visit_score:
+          type: number
+          title: Visit Score
+        confidence:
+          type: number
+          title: Confidence
+        primary_cause:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Primary Cause
+      type: object
+      required:
+      - day_of_week
+      - day_label
+      - hour
+      - time_range
+      - avg_population
+      - congestion_ratio
+      - hot_score
+      - visit_score
+      - confidence
+      - primary_cause
+      title: VisitTimeSlotOut
+    WeatherOut:
+      properties:
+        temp:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Temp
+        sensible_temp:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Sensible Temp
+        humidity:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Humidity
+        wind_spd:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Wind Spd
+        pm25:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Pm25
+        pm25_index:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Pm25 Index
+        pm10:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Pm10
+        pm10_index:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Pm10 Index
+      type: object
+      required:
+      - temp
+      - sensible_temp
+      - humidity
+      - wind_spd
+      - pm25
+      - pm25_index
+      - pm10
+      - pm10_index
+      title: WeatherOut

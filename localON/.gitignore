@@ -1,7 +1,8 @@
 /venv
 .env
 /example
-/DB_structure
+/DB_structure/*
+!/DB_structure/LOCAL_ON_DDL_v3_final.sql
 __pycache__/
 *.pyc
 *.pyo

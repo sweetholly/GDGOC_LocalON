@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.router import areas_router, mainpage_router, search_router
+from app.router import areas_router, insights_router, mainpage_router, search_router
 
 try:
     import yaml
@@ -50,6 +50,7 @@ def create_app() -> FastAPI:
     app.include_router(mainpage_router, tags=["main"])
     app.include_router(areas_router, tags=["areas"])
     app.include_router(search_router, tags=["search"])
+    app.include_router(insights_router, tags=["insights"])
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:

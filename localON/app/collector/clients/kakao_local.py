@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any
 import logging
 
-from app.domain import MapPalceCache
+from app.domain import MapPlaceCache
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -27,9 +27,9 @@ class KakaoLocalClient:
             return []
             
         # 1. Check cache first
-        cache_stmt = select(MapPalceCache).where(
-            MapPalceCache.query_key == query,
-            MapPalceCache.expires_at > datetime.now()
+        cache_stmt = select(MapPlaceCache).where(
+            MapPlaceCache.query_key == query,
+            MapPlaceCache.expires_at > datetime.now()
         )
         cache_rows = (await session.execute(cache_stmt)).scalars().all()
         
@@ -63,9 +63,9 @@ class KakaoLocalClient:
                 # But simple way is just save new ones and search filter handles expires_at
                 
                 for doc in documents:
-                    new_cache = MapPalceCache(
+                    new_cache = MapPlaceCache(
                         query_key=query,
-                        map_palce_id=doc.get("id"),
+                        map_place_id=doc.get("id"),
                         place_name=doc.get("place_name"),
                         lat=float(doc.get("y")) if doc.get("y") else None,
                         lng=float(doc.get("x")) if doc.get("x") else None,

@@ -293,8 +293,8 @@ class ReviewSnapshot(Base):
     crawled_at: Mapped[Any] = mapped_column(DateTime, nullable=True)
 
 
-class MapPalceCache(Base):
-    __tablename__ = "map_palce_cache"
+class MapPlaceCache(Base):
+    __tablename__ = "map_place_cache"
     __table_args__ = (
         Index("idx_mpc_query", "query_key"),
         Index("idx_mpc_expires", "expires_at"),
@@ -302,9 +302,77 @@ class MapPalceCache(Base):
 
     id: Mapped[Any] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     query_key: Mapped[Any] = mapped_column(String(200), nullable=False)
-    map_palce_id: Mapped[Any] = mapped_column(String(30), nullable=True)
+    map_place_id: Mapped[Any] = mapped_column(String(30), nullable=True)
     place_name: Mapped[Any] = mapped_column(String(200), nullable=True)
     lat: Mapped[Any] = mapped_column(Numeric(11, 8), nullable=True)
     lng: Mapped[Any] = mapped_column(Numeric(11, 8), nullable=True)
     payload_json: Mapped[Any] = mapped_column(JSON, nullable=True)
     expires_at: Mapped[Any] = mapped_column(DateTime, nullable=True)
+
+
+class RecommendationFeedbackLog(Base):
+    __tablename__ = "recommendation_feedback_logs"
+    __table_args__ = (
+        Index("idx_rfl_area_time", "area_id", "action_at"),
+        Index("idx_rfl_exposure", "exposure_id"),
+    )
+
+    id: Mapped[Any] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    exposure_id: Mapped[Any] = mapped_column(String(64), nullable=False)
+    area_id: Mapped[Any] = mapped_column(
+        Integer, ForeignKey("areas.area_id", ondelete="SET NULL"), nullable=True
+    )
+    algorithm_version: Mapped[Any] = mapped_column(String(30), nullable=True)
+    target_day_of_week: Mapped[Any] = mapped_column(SmallInteger, nullable=True)
+    target_hour: Mapped[Any] = mapped_column(SmallInteger, nullable=True)
+    score: Mapped[Any] = mapped_column(Numeric(6, 4), nullable=True)
+    action: Mapped[Any] = mapped_column(
+        Enum(
+            "shown",
+            "clicked",
+            "saved",
+            "visited_proxy",
+            name="enum_recommendation_feedback_logs_action",
+            native_enum=False,
+        ),
+        nullable=False,
+        default="shown",
+    )
+    action_at: Mapped[Any] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+    payload_json: Mapped[Any] = mapped_column(JSON, nullable=True)
+
+
+class ReviewReliabilitySnapshot(Base):
+    __tablename__ = "review_reliability_snapshots"
+    __table_args__ = (
+        Index("idx_rrs_place_time", "place_key", "analyzed_at"),
+        Index("idx_rrs_area_time", "area_id", "analyzed_at"),
+    )
+
+    id: Mapped[Any] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    place_key: Mapped[Any] = mapped_column(String(120), nullable=False)
+    place_name: Mapped[Any] = mapped_column(String(200), nullable=True)
+    area_id: Mapped[Any] = mapped_column(
+        Integer, ForeignKey("areas.area_id", ondelete="SET NULL"), nullable=True
+    )
+    source: Mapped[Any] = mapped_column(String(30), nullable=True)
+    total_reviews: Mapped[Any] = mapped_column(Integer, nullable=False, default=0)
+    ad_suspect_ratio: Mapped[Any] = mapped_column(Numeric(5, 4), nullable=False, default=0.0)
+    ai_suspect_ratio: Mapped[Any] = mapped_column(Numeric(5, 4), nullable=False, default=0.0)
+    duplicate_ratio: Mapped[Any] = mapped_column(Numeric(5, 4), nullable=False, default=0.0)
+    trust_score: Mapped[Any] = mapped_column(Numeric(5, 2), nullable=False, default=0.0)
+    model_version: Mapped[Any] = mapped_column(String(30), nullable=False, default="heuristic-v1")
+    analyzed_at: Mapped[Any] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+    signal_summary_json: Mapped[Any] = mapped_column(JSON, nullable=True)
+
+
+# Backward-compatibility alias for legacy imports/attribute names.
+MapPalceCache = MapPlaceCache

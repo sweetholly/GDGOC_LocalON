@@ -135,3 +135,36 @@ async def test_search_multiple_results(client: AsyncClient):
     assert len(body["results"]) == 2
     assert body["results"][0]["name"] == "강남 MICE 관광특구"
     assert body["results"][1]["name"] == "강남역"
+
+@pytest.mark.asyncio
+async def test_search_external_place_review_trust_fields(client: AsyncClient):
+    with_review = SearchOut(
+        query="\uce74\ud398",
+        results=[
+            SearchResultOut(
+                result_type="external_place",
+                area_id="123456",
+                name="\ud14c\uc2a4\ud2b8 \uce74\ud398",
+                address="\uc11c\uc6b8\uc2dc \uac15\ub0a8\uad6c",
+                category="\uce74\ud398",
+                lat=37.5,
+                lng=127.0,
+                review_trust_score=74.5,
+                review_trust_grade="medium",
+                review_total_reviews=41,
+                review_model_version="heuristic-v1",
+                review_data_status="analyzed",
+            )
+        ],
+    )
+
+    with patch("app.router.search.search_areas", new=AsyncMock(return_value=with_review)):
+        resp = await client.get("/search?q=\uce74\ud398")
+
+    body = resp.json()
+    result = body["results"][0]
+    assert result["result_type"] == "external_place"
+    assert result["review_trust_score"] == pytest.approx(74.5)
+    assert result["review_trust_grade"] == "medium"
+    assert result["review_total_reviews"] == 41
+    assert result["review_data_status"] == "analyzed"
