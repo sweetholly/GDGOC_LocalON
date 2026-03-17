@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import re
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 
+from app.collector.clients.gemini_rejudge import GeminiRejudgeClient, GeminiRejudgeResult
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -146,6 +148,60 @@ def _grade_from_trust(trust: float) -> str:
     if trust >= 60.0:
         return "medium"
     return "low"
+
+
+def _truthy(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _gemini_rejudge_enabled() -> bool:
+    return _truthy(os.getenv("ENABLE_GEMINI_REJUDGE"), default=True)
+
+
+def _blend_ratio(base_ratio: float, llm_ratio: float, llm_weight: float) -> float:
+    w = max(0.0, min(1.0, llm_weight))
+    return (1.0 - w) * base_ratio + (w * llm_ratio)
+
+
+async def _run_gemini_rejudge_if_needed(
+    place_name: str,
+    reviews: list,
+    initial_trust_score: float,
+) -> GeminiRejudgeResult | None:
+    if not _gemini_rejudge_enabled():
+        return None
+    if not reviews:
+        return None
+
+    min_reviews = int(os.getenv("GEMINI_REJUDGE_MIN_REVIEWS", "3"))
+    trust_min = float(os.getenv("GEMINI_REJUDGE_TRUST_MIN", "35"))
+    trust_max = float(os.getenv("GEMINI_REJUDGE_TRUST_MAX", "90"))
+    if len(reviews) < min_reviews:
+        return None
+    if not (trust_min <= initial_trust_score <= trust_max):
+        return None
+
+    client = GeminiRejudgeClient(
+        api_key=os.getenv("GEMINI_API_KEY", "").strip(),
+        model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip(),
+        timeout_seconds=float(os.getenv("GEMINI_TIMEOUT_SECONDS", "8")),
+    )
+    if not client.enabled:
+        return None
+
+    review_payload = [
+        {
+            "text": review.text,
+            "rating": review.rating,
+        }
+        for review in reviews
+    ]
+    return await client.rejudge_reviews(
+        place_name=place_name,
+        reviews=review_payload,
+    )
 
 
 async def get_visit_insights(
@@ -488,7 +544,27 @@ async def analyze_review_reliability(
         + 0.10 * extreme_ratio
     )
     trust_score = max(0.0, min(100.0, round((1.0 - penalty) * 100.0, 2)))
+    llm_result = await _run_gemini_rejudge_if_needed(
+        place_name=payload.place_name,
+        reviews=payload.reviews,
+        initial_trust_score=trust_score,
+    )
+    llm_used = llm_result is not None
+
+    if llm_result is not None:
+        # Blend heuristic and LLM judgement for borderline cases.
+        ad_ratio = _blend_ratio(ad_ratio, llm_result.ad_suspect_ratio, llm_weight=0.40)
+        ai_ratio = _blend_ratio(ai_ratio, llm_result.ai_suspect_ratio, llm_weight=0.45)
+        penalty = (
+            0.45 * ad_ratio
+            + 0.30 * ai_ratio
+            + 0.15 * duplicate_ratio
+            + 0.10 * extreme_ratio
+        )
+        trust_score = max(0.0, min(100.0, round((1.0 - penalty) * 100.0, 2)))
+
     grade = _grade_from_trust(trust_score)
+    model_version = "heuristic-v1+gemini-rejudge-v1" if llm_used else "heuristic-v1"
 
     out = ReviewReliabilityOut(
         place_key=place_key,
@@ -501,7 +577,7 @@ async def analyze_review_reliability(
         grade=grade,
         suspicious_reviews=suspicious_reviews[:8],
         analyzed_at=datetime.now(),
-        model_version="heuristic-v1",
+        model_version=model_version,
     )
 
     snapshot = ReviewReliabilitySnapshot(
@@ -518,6 +594,11 @@ async def analyze_review_reliability(
         signal_summary_json={
             "grade": out.grade,
             "suspicious_count": len(out.suspicious_reviews),
+            "llm_rejudge": {
+                "used": llm_used,
+                "confidence": llm_result.confidence if llm_result else None,
+                "notes": llm_result.notes if llm_result else [],
+            },
         },
     )
     session.add(snapshot)

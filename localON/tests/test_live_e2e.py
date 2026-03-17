@@ -14,6 +14,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.core.app import create_app
+from app.domain import dispose_engine
 
 
 def _truthy(value: str | None) -> bool:
@@ -31,8 +32,12 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 async def live_client():
     app = create_app()
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            yield client
+    finally:
+        # Avoid stale aiomysql pooled connections across async test event loops.
+        await dispose_engine()
 
 
 @pytest.mark.asyncio

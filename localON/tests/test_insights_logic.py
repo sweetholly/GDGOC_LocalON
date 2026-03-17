@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.collector.clients.gemini_rejudge import GeminiRejudgeResult
 from app.controller.insights import analyze_review_reliability, build_place_key
 from app.schema.insights import ReviewItemIn, ReviewReliabilityIn
 
@@ -149,3 +150,41 @@ async def test_analyze_review_reliability_commit_failure_rolls_back():
     assert out.total_reviews == 1
     assert session.commit_count == 1
     assert session.rollback_count == 1
+
+
+@pytest.mark.asyncio
+async def test_analyze_review_reliability_with_gemini_rejudge(monkeypatch):
+    async def _fake_rejudge(self, *, place_name, reviews):
+        return GeminiRejudgeResult(
+            ad_suspect_ratio=1.0,
+            ai_suspect_ratio=1.0,
+            confidence=0.92,
+            notes=["llm_rejudge_applied"],
+        )
+
+    monkeypatch.setenv("ENABLE_GEMINI_REJUDGE", "true")
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-key")
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-2.0-flash")
+    monkeypatch.setenv("GEMINI_REJUDGE_MIN_REVIEWS", "1")
+    monkeypatch.setenv("GEMINI_REJUDGE_TRUST_MIN", "0")
+    monkeypatch.setenv("GEMINI_REJUDGE_TRUST_MAX", "100")
+    monkeypatch.setattr(
+        "app.collector.clients.gemini_rejudge.GeminiRejudgeClient.rejudge_reviews",
+        _fake_rejudge,
+    )
+
+    session = _FakeSession()
+    payload = ReviewReliabilityIn(
+        place_name="LLM Blend Cafe",
+        source="google_places",
+        reviews=[
+            ReviewItemIn(text="Great coffee and kind service", rating=4.6),
+            ReviewItemIn(text="Comfortable seats and quiet atmosphere", rating=4.7),
+        ],
+    )
+
+    out = await analyze_review_reliability(session=session, payload=payload)
+
+    assert out.model_version == "heuristic-v1+gemini-rejudge-v1"
+    assert out.trust_score < 80.0
+    assert out.grade in {"medium", "low"}
