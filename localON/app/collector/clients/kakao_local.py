@@ -7,7 +7,7 @@ import logging
 
 from app.domain import MapPlaceCache
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +58,15 @@ class KakaoLocalClient:
         if documents:
             try:
                 expires_at = datetime.now() + timedelta(days=7) # 7 days TTL
-                
-                # Delete old cache for this query just in case some are expired
-                # But simple way is just save new ones and search filter handles expires_at
-                
+
+                # MapPlaceCache 테이블에서, 동일한 query_key이면서 만료된 레코드를 삭제한다.
+                await session.excute(
+                    delete(MapPlaceCache).where(
+                        MapPlaceCache.query_key == query,
+                        MapPlaceCache.expires_at <= datetime.now()
+                    )
+                )
+
                 for doc in documents:
                     new_cache = MapPlaceCache(
                         query_key=query,
