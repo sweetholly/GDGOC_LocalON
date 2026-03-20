@@ -45,6 +45,7 @@ class SeoulOpenApiClient:
         encoded_area_name = quote(area_name, safe="")
         url = self.settings.citydata_url_template.format(
             api_key=self.settings.citydata_api_key,
+            CITYDATA_API_KEY=self.settings.citydata_api_key,
             area_name=encoded_area_name,
             area_name_raw=area_name,
             service_name=self.settings.sdot_service_name,
@@ -59,6 +60,7 @@ class SeoulOpenApiClient:
 
         url = self.settings.sdot_url_template.format(
             api_key=self.settings.citydata_api_key,
+            CITYDATA_API_KEY=self.settings.citydata_api_key,
             service_name=self.settings.sdot_service_name,
             limit=self.settings.sdot_limit,
         )

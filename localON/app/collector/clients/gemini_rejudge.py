@@ -62,6 +62,7 @@ class GeminiRejudgeClient:
         *,
         place_name: str,
         reviews: list[dict[str, Any]],
+        total_reviews_hint: int | None = None,
     ) -> GeminiRejudgeResult | None:
         if not self.enabled or not reviews:
             return None
@@ -81,9 +82,24 @@ class GeminiRejudgeClient:
         if not limited_reviews:
             return None
 
+        sampled_count = len(limited_reviews)
+        reported_total = sampled_count
+        if total_reviews_hint is not None:
+            reported_total = max(sampled_count, int(total_reviews_hint))
+        coverage_ratio = sampled_count / max(reported_total, 1)
+
         prompt_payload = {
             "task": "Classify ad-like and AI-generated-like review signals.",
             "place_name": place_name,
+            "analysis_context": {
+                "sampled_review_count": sampled_count,
+                "reported_total_review_count": reported_total,
+                "sample_coverage_ratio": round(coverage_ratio, 4),
+                "decision_policy": (
+                    "Be conservative. If evidence is ambiguous or sample coverage is low, "
+                    "prefer suspicious classification over clean classification."
+                ),
+            },
             "rules": {
                 "ad_like_examples": [
                     "sponsorship disclosure",

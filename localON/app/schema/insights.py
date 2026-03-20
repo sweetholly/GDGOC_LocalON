@@ -55,6 +55,7 @@ class ReviewReliabilityIn(BaseModel):
     place_id: str | None = Field(default=None, max_length=60)
     area_id: int | None = Field(default=None, gt=0)
     source: str | None = Field(default=None, max_length=30)
+    total_reviews_hint: int | None = Field(default=None, ge=0)
     reviews: list[ReviewItemIn] = Field(default_factory=list)
 
 
