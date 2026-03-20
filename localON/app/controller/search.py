@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 import logging
 import os
 
@@ -69,6 +70,26 @@ async def _load_external_review_snapshots(
 def _google_review_enrich_enabled() -> bool:
     raw = os.getenv("ENABLE_GOOGLE_REVIEW_ENRICH", "true").strip().lower()
     return raw in {"1", "true", "yes", "y", "on"}
+
+
+def _review_snapshot_max_age_hours() -> int:
+    raw = os.getenv("REVIEW_SNAPSHOT_MAX_AGE_HOURS", "24").strip()
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 24
+
+
+def _is_review_snapshot_stale(snapshot: ReviewReliabilitySnapshot) -> bool:
+    analyzed_at = snapshot.analyzed_at
+    if analyzed_at is None:
+        return True
+
+    max_age_hours = _review_snapshot_max_age_hours()
+    if max_age_hours == 0:
+        return True
+
+    return analyzed_at <= (datetime.now() - timedelta(hours=max_age_hours))
 
 
 async def _analyze_external_place_reviews_with_google(
@@ -214,10 +235,11 @@ async def search_areas(session: AsyncSession, q: str) -> SearchOut:
         snapshot = external_review_map.get(place_key) or (
             external_review_map.get(place_id) if place_id else None
         )
+        snapshot_stale = _is_review_snapshot_stale(snapshot) if snapshot else False
 
         auto_analyzed: SearchResultOut | None = None
         if (
-            snapshot is None
+            (snapshot is None or snapshot_stale)
             and google_client.enabled
             and _google_review_enrich_enabled()
             and place_name
