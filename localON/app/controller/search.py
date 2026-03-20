@@ -33,9 +33,9 @@ logger = logging.getLogger(__name__)
 def _trust_grade(score: float | None) -> str:
     if score is None:
         return "unknown"
-    if score >= 80.0:
+    if score >= 85.0:
         return "high"
-    if score >= 60.0:
+    if score >= 70.0:
         return "medium"
     return "low"
 
@@ -182,11 +182,19 @@ def _google_review_enrich_enabled() -> bool:
 
 
 def _review_snapshot_max_age_hours() -> int:
-    raw = os.getenv("REVIEW_SNAPSHOT_MAX_AGE_HOURS", "24").strip()
+    raw = os.getenv("REVIEW_SNAPSHOT_MAX_AGE_HOURS", "12").strip()
     try:
         return max(0, int(raw))
     except ValueError:
-        return 24
+        return 12
+
+
+def _external_review_min_analysis_samples() -> int:
+    raw = os.getenv("EXTERNAL_REVIEW_MIN_ANALYSIS_SAMPLES", "5").strip()
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 5
 
 
 def _is_review_snapshot_stale(snapshot: ReviewReliabilitySnapshot) -> bool:
@@ -307,7 +315,8 @@ async def analyze_external_place_review_reliability(
         for item in bundle.reviews
         if item.text and item.text.strip()
     ]
-    if not review_items:
+    min_samples = _external_review_min_analysis_samples()
+    if len(review_items) < min_samples:
         if snapshot:
             return _snapshot_to_external_reliability_out(
                 snapshot=snapshot,
@@ -321,7 +330,11 @@ async def analyze_external_place_review_reliability(
             place_key=build_place_key(normalized_place_id, place_name, source=source),
             place_name=place_name,
             review_data_status="insufficient_data",
-            review_total_reviews=bundle.user_rating_count,
+            review_total_reviews=(
+                max(len(review_items), int(bundle.user_rating_count))
+                if bundle.user_rating_count is not None
+                else len(review_items)
+            ),
             kakao_place_url=_build_kakao_place_url(
                 place_id=normalized_place_id,
                 place_name=place_name,

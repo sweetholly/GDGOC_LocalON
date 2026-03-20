@@ -151,11 +151,30 @@ def _weather_factor(row: CitydataWeatherForecast) -> tuple[float, str | None]:
 
 
 def _grade_from_trust(trust: float) -> str:
-    if trust >= 80.0:
+    if trust >= 85.0:
         return "high"
-    if trust >= 60.0:
+    if trust >= 70.0:
         return "medium"
     return "low"
+
+
+def _sample_evidence_penalty(sample_reviews: int, total_reviews: int) -> float:
+    if sample_reviews <= 0:
+        return 0.0
+
+    penalty = 0.0
+
+    if sample_reviews < 5:
+        penalty += 0.20
+    elif sample_reviews < 10:
+        penalty += 0.10
+
+    if sample_reviews > 0 and total_reviews > 0:
+        coverage_ratio = sample_reviews / total_reviews
+        if coverage_ratio < 0.05:
+            penalty += 0.10
+
+    return min(0.40, penalty)
 
 
 def _truthy(value: str | None, default: bool = False) -> bool:
@@ -177,6 +196,7 @@ async def _run_gemini_rejudge_if_needed(
     place_name: str,
     reviews: list,
     initial_trust_score: float,
+    total_reviews_hint: int | None = None,
 ) -> GeminiRejudgeResult | None:
     if not _gemini_rejudge_enabled():
         return None
@@ -185,7 +205,7 @@ async def _run_gemini_rejudge_if_needed(
 
     min_reviews = int(os.getenv("GEMINI_REJUDGE_MIN_REVIEWS", "3"))
     trust_min = float(os.getenv("GEMINI_REJUDGE_TRUST_MIN", "35"))
-    trust_max = float(os.getenv("GEMINI_REJUDGE_TRUST_MAX", "90"))
+    trust_max = float(os.getenv("GEMINI_REJUDGE_TRUST_MAX", "98"))
     if len(reviews) < min_reviews:
         return None
     if not (trust_min <= initial_trust_score <= trust_max):
@@ -209,6 +229,7 @@ async def _run_gemini_rejudge_if_needed(
     return await client.rejudge_reviews(
         place_name=place_name,
         reviews=review_payload,
+        total_reviews_hint=total_reviews_hint,
     )
 
 
@@ -501,6 +522,7 @@ async def analyze_review_reliability(
     ad_ratio = 0.0
     ai_ratio = 0.0
     extreme_ratio = 0.0
+    sample_penalty = _sample_evidence_penalty(sample_reviews, reported_total_reviews)
 
     if sample_reviews > 0:
         normalized_texts: list[str] = []
@@ -525,7 +547,7 @@ async def analyze_review_reliability(
                     SuspiciousReviewOut(reason="ai_generated_suspected", preview=_truncate_preview(text))
                 )
 
-            if _rating_extreme(review.rating) and len(text) <= 24:
+            if _rating_extreme(review.rating) and len(text) <= 50:
                 extreme_hits += 1
 
         text_counts = Counter(normalized_texts)
@@ -554,12 +576,14 @@ async def analyze_review_reliability(
         + 0.30 * ai_ratio
         + 0.15 * duplicate_ratio
         + 0.10 * extreme_ratio
+        + sample_penalty
     )
     trust_score = max(0.0, min(100.0, round((1.0 - penalty) * 100.0, 2)))
     llm_result = await _run_gemini_rejudge_if_needed(
         place_name=payload.place_name,
         reviews=payload.reviews,
         initial_trust_score=trust_score,
+        total_reviews_hint=reported_total_reviews,
     )
     llm_used = llm_result is not None
 
@@ -572,6 +596,7 @@ async def analyze_review_reliability(
             + 0.30 * ai_ratio
             + 0.15 * duplicate_ratio
             + 0.10 * extreme_ratio
+            + sample_penalty
         )
         trust_score = max(0.0, min(100.0, round((1.0 - penalty) * 100.0, 2)))
 
@@ -606,6 +631,11 @@ async def analyze_review_reliability(
         signal_summary_json={
             "grade": out.grade,
             "suspicious_count": len(out.suspicious_reviews),
+            "sample_context": {
+                "sample_reviews": sample_reviews,
+                "reported_total_reviews": reported_total_reviews,
+                "sample_penalty": round(sample_penalty, 4),
+            },
             "llm_rejudge": {
                 "used": llm_used,
                 "confidence": llm_result.confidence if llm_result else None,

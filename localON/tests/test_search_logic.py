@@ -73,11 +73,12 @@ def _bundle() -> GooglePlaceReviewBundle:
         user_rating_count=321,
         reviews=[
             GooglePlaceReview(
-                text="Great coffee and kind staff",
+                text=f"Great coffee and kind staff #{idx}",
                 rating=4.6,
                 published_at=datetime(2026, 3, 20, 9, 0, 0),
                 author_name="alice",
             )
+            for idx in range(1, 6)
         ],
     )
 
@@ -294,6 +295,58 @@ async def test_external_place_reliability_analyzes_when_snapshot_missing(monkeyp
     assert out.review_trust_score == pytest.approx(89.7)
     assert out.review_model_version == "heuristic-v1+gemini-rejudge-v1"
     assert out.review_total_reviews == 321
+
+
+@pytest.mark.asyncio
+async def test_external_place_reliability_skips_analysis_for_too_few_reviews(monkeypatch):
+    monkeypatch.setenv("GOOGLE_PLACES_API_KEY", "dummy-key")
+    monkeypatch.setenv("EXTERNAL_REVIEW_MIN_ANALYSIS_SAMPLES", "5")
+    session = _FakeSession([_ExecuteResult(scalars=[])])
+
+    async def _fake_google(self, *, place_name, address=None, language_code="ko", region_code="KR"):
+        return GooglePlaceReviewBundle(
+            google_place_id="g-888",
+            place_name="Few Reviews Cafe",
+            rating=4.1,
+            user_rating_count=42,
+            reviews=[
+                GooglePlaceReview(
+                    text="Nice place",
+                    rating=4.0,
+                    published_at=datetime(2026, 3, 20, 11, 0, 0),
+                    author_name="alice",
+                ),
+                GooglePlaceReview(
+                    text="Friendly owner",
+                    rating=4.2,
+                    published_at=datetime(2026, 3, 20, 11, 5, 0),
+                    author_name="bob",
+                ),
+            ],
+        )
+
+    async def _never_analyze(*, session, payload):
+        raise AssertionError("analysis should not run when sample count is below threshold")
+
+    monkeypatch.setattr(
+        "app.collector.clients.google_places.GooglePlacesClient.fetch_reviews_for_place",
+        _fake_google,
+    )
+    monkeypatch.setattr("app.controller.search.analyze_review_reliability", _never_analyze)
+
+    out = await analyze_external_place_review_reliability(
+        session,
+        ExternalPlaceReviewReliabilityIn(
+            place_id="888",
+            place_name="Few Reviews Cafe",
+            address="Seoul",
+            force_refresh=True,
+        ),
+    )
+
+    assert out.review_data_status == "insufficient_data"
+    assert out.review_trust_score is None
+    assert out.review_total_reviews == 42
 
 
 @pytest.mark.asyncio

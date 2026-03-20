@@ -45,6 +45,11 @@ class _FakeSession:
         self.rollback_count += 1
 
 
+@pytest.fixture(autouse=True)
+def _disable_gemini_by_default(monkeypatch):
+    monkeypatch.setenv("ENABLE_GEMINI_REJUDGE", "false")
+
+
 def test_build_place_key_with_source_prefix():
     assert build_place_key("12345", "Test Cafe", "kakao") == "kakao:12345"
 
@@ -92,7 +97,7 @@ def test_ai_rule_keeps_clean_short_review():
 
 
 @pytest.mark.asyncio
-async def test_analyze_review_reliability_clean_reviews_high_trust():
+async def test_analyze_review_reliability_clean_reviews_with_small_sample_penalty():
     session = _FakeSession()
     payload = ReviewReliabilityIn(
         place_name="Test Cafe",
@@ -111,8 +116,8 @@ async def test_analyze_review_reliability_clean_reviews_high_trust():
     assert out.ad_suspect_ratio == pytest.approx(0.0)
     assert out.ai_suspect_ratio == pytest.approx(0.0)
     assert out.duplicate_ratio == pytest.approx(0.0)
-    assert out.trust_score >= 95.0
-    assert out.grade == "high"
+    assert out.trust_score == pytest.approx(80.0)
+    assert out.grade == "medium"
     assert len(out.suspicious_reviews) == 0
     assert session.commit_count == 1
     assert session.rollback_count == 0
@@ -212,7 +217,7 @@ async def test_analyze_review_reliability_commit_failure_rolls_back():
 
 @pytest.mark.asyncio
 async def test_analyze_review_reliability_with_gemini_rejudge(monkeypatch):
-    async def _fake_rejudge(self, *, place_name, reviews):
+    async def _fake_rejudge(self, *, place_name, reviews, total_reviews_hint=None):
         return GeminiRejudgeResult(
             ad_suspect_ratio=1.0,
             ai_suspect_ratio=1.0,
@@ -246,3 +251,34 @@ async def test_analyze_review_reliability_with_gemini_rejudge(monkeypatch):
     assert out.model_version == "heuristic-v1+gemini-rejudge-v1"
     assert out.trust_score < 80.0
     assert out.grade in {"medium", "low"}
+
+
+def test_grade_threshold_medium_starts_at_70():
+    assert insights._grade_from_trust(69.99) == "low"
+    assert insights._grade_from_trust(70.0) == "medium"
+    assert insights._grade_from_trust(84.99) == "medium"
+    assert insights._grade_from_trust(85.0) == "high"
+
+
+@pytest.mark.asyncio
+async def test_analyze_review_reliability_penalizes_low_sample_coverage(monkeypatch):
+    session = _FakeSession()
+    payload = ReviewReliabilityIn(
+        place_name="Sparse Sample Cafe",
+        place_id="kakao:300",
+        source="google_places",
+        total_reviews_hint=500,
+        reviews=[
+            ReviewItemIn(text="Great coffee and calm seats", rating=4.6),
+            ReviewItemIn(text="Staff are friendly and quick", rating=4.5),
+            ReviewItemIn(text="Clean tables and stable taste", rating=4.7),
+            ReviewItemIn(text="Comfortable environment for study", rating=4.4),
+            ReviewItemIn(text="Dessert quality is consistently good", rating=4.5),
+        ],
+    )
+
+    out = await analyze_review_reliability(session=session, payload=payload)
+
+    assert out.total_reviews == 500
+    assert out.trust_score == pytest.approx(80.0)
+    assert out.grade == "medium"
