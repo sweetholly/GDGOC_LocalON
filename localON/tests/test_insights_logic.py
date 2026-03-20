@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.controller import insights
 from app.collector.clients.gemini_rejudge import GeminiRejudgeResult
 from app.controller.insights import analyze_review_reliability, build_place_key
 from app.schema.insights import ReviewItemIn, ReviewReliabilityIn
@@ -56,6 +57,40 @@ def test_build_place_key_without_id_normalizes_name():
     assert build_place_key(None, "  Test   Cafe  ", "kakao") == "test_cafe"
 
 
+def test_ad_patterns_match_korean_markers():
+    samples = [
+        "#\uad11\uace0 \ud3ec\uc2a4\ud2b8\uc785\ub2c8\ub2e4",
+        "\uc5c5\uccb4\ub85c\ubd80\ud130 \ud611\ucc2c\uc744 \ubc1b\uc544 \uc791\uc131\ud588\uc2b5\ub2c8\ub2e4",
+        "\uc81c\uacf5\ubc1b\uc544 \uccb4\ud5d8\ud55c \ud6c4\uae30",
+        "\uc11c\ud3ec\ud130\uc988 \ud65c\ub3d9 \ub9ac\ubdf0\uc785\ub2c8\ub2e4",
+    ]
+    for text in samples:
+        assert any(pattern.search(text) for pattern in insights._AD_PATTERNS)
+
+
+def test_ad_pattern_word_boundary_avoids_false_positive():
+    benign = "broad road quality and reading room access"
+    assert not any(pattern.search(benign) for pattern in insights._AD_PATTERNS)
+
+
+def test_ai_style_patterns_match_korean_markers():
+    text = "\uc804\ubc18\uc801\uc73c\ub85c \ud6c4\uae30\ub97c \uc815\ub9ac\ud558\uc790\uba74 \ub9cc\uc871\uc2a4\ub7fd\uace0 \uacb0\ub860\uc801\uc73c\ub85c \ucd94\ucc9c\ud55c\ub2e4."
+    normalized = " ".join(text.split()).lower()
+    assert insights._review_ai_suspect(text, normalized)
+
+
+def test_ai_repetition_rule_catches_low_variance_text():
+    text = ("great " * 20).strip()
+    normalized = " ".join(text.split()).lower()
+    assert insights._review_ai_suspect(text, normalized)
+
+
+def test_ai_rule_keeps_clean_short_review():
+    text = "Great coffee and kind staff. Cozy place with stable quality."
+    normalized = " ".join(text.split()).lower()
+    assert not insights._review_ai_suspect(text, normalized)
+
+
 @pytest.mark.asyncio
 async def test_analyze_review_reliability_clean_reviews_high_trust():
     session = _FakeSession()
@@ -82,6 +117,29 @@ async def test_analyze_review_reliability_clean_reviews_high_trust():
     assert session.commit_count == 1
     assert session.rollback_count == 0
     assert len(session.added) == 1
+
+
+@pytest.mark.asyncio
+async def test_analyze_review_reliability_uses_total_reviews_hint_for_output():
+    session = _FakeSession()
+    payload = ReviewReliabilityIn(
+        place_name="Hinted Count Cafe",
+        place_id="kakao:101",
+        source="google_places",
+        total_reviews_hint=128,
+        reviews=[
+            ReviewItemIn(text="Great coffee and cozy seating", rating=4.6),
+            ReviewItemIn(text="Friendly staff and quick service", rating=4.5),
+            ReviewItemIn(text="Dessert quality stays consistent", rating=4.7),
+        ],
+    )
+
+    out = await analyze_review_reliability(session=session, payload=payload)
+
+    assert out.total_reviews == 128
+    assert out.ad_suspect_ratio == pytest.approx(0.0)
+    assert out.ai_suspect_ratio == pytest.approx(0.0)
+    assert out.duplicate_ratio == pytest.approx(0.0)
 
 
 @pytest.mark.asyncio

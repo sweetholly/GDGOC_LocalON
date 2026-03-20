@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from functools import lru_cache
+import os
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.router import areas_router, insights_router, mainpage_router, search_router
 
@@ -17,6 +20,7 @@ except ModuleNotFoundError:
 
 
 OPENAPI_SPEC_PATH = Path(__file__).resolve().parents[2] / "docs" / "openapi.yaml"
+FRONTEND_DEMO_PATH = Path(__file__).resolve().parents[2] / "localOn_Frontend"
 
 
 @lru_cache(maxsize=1)
@@ -28,11 +32,26 @@ def _load_openapi_spec() -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
+def _cors_origins_from_env() -> list[str]:
+    raw = os.getenv("CORS_ALLOW_ORIGINS", "*").strip()
+    if raw == "*":
+        return ["*"]
+    origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return origins or ["*"]
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="LOCAL ON API",
         version="1.0.0",
         description="Real-time Seoul citydata based congestion information API",
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins_from_env(),
+        allow_methods=["*"],
+        allow_headers=["*"],
+        allow_credentials=False,
     )
     default_openapi = app.openapi
 
@@ -51,6 +70,9 @@ def create_app() -> FastAPI:
     app.include_router(areas_router, tags=["areas"])
     app.include_router(search_router, tags=["search"])
     app.include_router(insights_router, tags=["insights"])
+
+    if FRONTEND_DEMO_PATH.exists():
+        app.mount("/demo", StaticFiles(directory=FRONTEND_DEMO_PATH, html=True), name="demo")
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:

@@ -44,27 +44,33 @@ _HOT_LEVEL_HINTS = (
 _AD_PATTERNS = tuple(
     re.compile(p, flags=re.IGNORECASE)
     for p in (
-        r"\uad11\uace0",
-        r"\ud611\ucc2c",
-        r"\uccb4\ud5d8\ub2e8",
-        r"\uc6d0\uace0\ub8cc",
-        r"\uc81c\uacf5\ubc1b\uc544",
-        r"\ud30c\ud2b8\ub108\uc2a4",
+        "\uad11\uace0",
+        "\ud611\ucc2c",
+        "\uccb4\ud5d8\ub2e8",
+        "\uc6d0\uace0\ub8cc",
+        "\uc81c\uacf5\ubc1b\uc544",
+        "\uc9c0\uc6d0\ubc1b\uc544",
+        "\ud30c\ud2b8\ub108\uc2ed",
+        "\ud30c\ud2b8\ub108\uc2a4",
+        "\uc11c\ud3ec\ud130\uc988",
         r"sponsored",
         r"paid partnership",
-        r"ad\b",
+        r"#ad\b",
+        r"\bad\b",
     )
 )
 _AI_STYLE_PATTERNS = tuple(
     re.compile(p, flags=re.IGNORECASE)
     for p in (
-        r"\uc804\ubc18\uc801\uc73c\ub85c",
-        r"\uc885\ud569\uc801\uc73c\ub85c",
-        r"\uc694\uc57d\ud558\uc790\uba74",
-        r"\uacb0\ub860\uc801\uc73c\ub85c",
-        r"\ud55c\ud3b8",
+        "\uc804\ubc18\uc801\uc73c\ub85c",
+        "\uc885\ud569\uc801\uc73c\ub85c",
+        "\uc885\ud569\ud558\uba74",
+        "\uc694\uc57d\ud558\uc790\uba74",
+        "\uc815\ub9ac\ud558\uc790\uba74",
+        "\uacb0\ub860\uc801\uc73c\ub85c",
         r"overall",
         r"in conclusion",
+        r"to summarize",
     )
 )
 
@@ -121,10 +127,12 @@ def _review_ai_suspect(text: str, normalized: str) -> bool:
 
     unique_ratio = len(set(tokens)) / max(len(tokens), 1)
     repeated_ratio = Counter(tokens).most_common(1)[0][1] / max(len(tokens), 1)
-    style_hit = any(pattern.search(text) for pattern in _AI_STYLE_PATTERNS)
-    too_uniform = unique_ratio < 0.45 and len(tokens) >= 25
-    too_repetitive = repeated_ratio > 0.20 and len(tokens) >= 20
-    too_long = len(text) >= 260 and text.count(",") >= 4
+    style_hits = sum(1 for pattern in _AI_STYLE_PATTERNS if pattern.search(text))
+    style_hit = style_hits >= 2 or (style_hits >= 1 and len(tokens) >= 18)
+    too_uniform = unique_ratio < 0.52 and len(tokens) >= 20
+    too_repetitive = repeated_ratio > 0.18 and len(tokens) >= 15
+    sentence_punct_count = text.count(",") + text.count(".")
+    too_long = len(text) >= 220 and sentence_punct_count >= 5
     return style_hit or too_uniform or too_repetitive or too_long
 
 
@@ -482,7 +490,11 @@ async def analyze_review_reliability(
     place_key = build_place_key(payload.place_id, payload.place_name, payload.source)
     suspicious_reviews: list[SuspiciousReviewOut] = []
 
-    total_reviews = len(payload.reviews)
+    sample_reviews = len(payload.reviews)
+    reported_total_reviews = sample_reviews
+    if payload.total_reviews_hint is not None:
+        reported_total_reviews = max(sample_reviews, int(payload.total_reviews_hint))
+
     ad_hits = 0
     ai_hits = 0
     duplicate_ratio = 0.0
@@ -490,7 +502,7 @@ async def analyze_review_reliability(
     ai_ratio = 0.0
     extreme_ratio = 0.0
 
-    if total_reviews > 0:
+    if sample_reviews > 0:
         normalized_texts: list[str] = []
         extreme_hits = 0
 
@@ -519,10 +531,10 @@ async def analyze_review_reliability(
         text_counts = Counter(normalized_texts)
         duplicate_count = sum(count - 1 for count in text_counts.values() if count > 1)
 
-        duplicate_ratio = duplicate_count / total_reviews
-        ad_ratio = ad_hits / total_reviews
-        ai_ratio = ai_hits / total_reviews
-        extreme_ratio = extreme_hits / total_reviews
+        duplicate_ratio = duplicate_count / sample_reviews
+        ad_ratio = ad_hits / sample_reviews
+        ai_ratio = ai_hits / sample_reviews
+        extreme_ratio = extreme_hits / sample_reviews
     elif payload.area_id is not None:
         latest = (
             await session.execute(
@@ -569,7 +581,7 @@ async def analyze_review_reliability(
     out = ReviewReliabilityOut(
         place_key=place_key,
         place_name=payload.place_name,
-        total_reviews=total_reviews,
+        total_reviews=reported_total_reviews,
         ad_suspect_ratio=round(ad_ratio, 4),
         ai_suspect_ratio=round(ai_ratio, 4),
         duplicate_ratio=round(duplicate_ratio, 4),
